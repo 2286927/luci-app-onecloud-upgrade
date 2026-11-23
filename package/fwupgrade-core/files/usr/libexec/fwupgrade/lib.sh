@@ -197,19 +197,19 @@ state_commit() {
 state_replace() {
     mkdir -p "$FWU_ROOT" || die "$EX_STATE" "无法创建 $FWU_ROOT"
     if [ -f "$FWU_STATE_ENV" ]; then
-        cp "$FWU_STATE_ENV" "$FWU_STATE_ENV.tmp" || die "$EX_STATE" "状态读取失败"
+        cp "$FWU_STATE_ENV" "$FWU_STATE_ENV.tmp.$$" || die "$EX_STATE" "状态读取失败"
     else
-        : >"$FWU_STATE_ENV.tmp"
+        : >"$FWU_STATE_ENV.tmp.$$"
     fi
     for _kv in "$@"; do
         _k=${_kv%%=*}
         _v=${_kv#*=}
-        grep -v "^${_k}=" "$FWU_STATE_ENV.tmp" >"$FWU_STATE_ENV.tmp2" 2>/dev/null
-        printf '%s=%s\n' "$_k" "$_v" >>"$FWU_STATE_ENV.tmp2"
-        mv -f "$FWU_STATE_ENV.tmp2" "$FWU_STATE_ENV.tmp"
+        grep -v "^${_k}=" "$FWU_STATE_ENV.tmp.$$" >"$FWU_STATE_ENV.tmp2.$$" 2>/dev/null
+        printf '%s=%s\n' "$_k" "$_v" >>"$FWU_STATE_ENV.tmp2.$$"
+        mv -f "$FWU_STATE_ENV.tmp2.$$" "$FWU_STATE_ENV.tmp.$$"
     done
     sync
-    mv -f "$FWU_STATE_ENV.tmp" "$FWU_STATE_ENV" || die "$EX_STATE" "状态写入失败"
+    mv -f "$FWU_STATE_ENV.tmp.$$" "$FWU_STATE_ENV" || die "$EX_STATE" "状态写入失败"
     state_commit_core
 }
 
@@ -221,11 +221,11 @@ state_commit_core() {
     _upd=$(state_get updated_at); _cur=$(state_get current)
     case "$_code" in ''|*[!0-9]*) _code=0 ;; esac
     case "$_prog" in ''|*[!0-9]*) _prog=0 ;; esac
-    cat >"$FWU_STATE_JSON.tmp" <<EOF
+    cat >"$FWU_STATE_JSON.tmp.$$" <<EOF
 {"schema":1,"phase":"$(jesc "${_phase:-idle}")","last_result":"$(jesc "${_res:-none}")","mixed_state":"$(jesc "${_mix:-N}")","job_id":"$(jesc "$_job")","current":"$(jesc "$_cur")","version":"$(jesc "$_ver")","target":"$(jesc "$_tgt")","detail":"$(jesc "$_detail")","code":$_code,"progress":$_prog,"updated_at":"$(jesc "${_upd:-$(iso_now)}")"}
 EOF
     sync
-    mv -f "$FWU_STATE_JSON.tmp" "$FWU_STATE_JSON" || rm -f "$FWU_STATE_JSON.tmp"
+    mv -f "$FWU_STATE_JSON.tmp.$$" "$FWU_STATE_JSON" || rm -f "$FWU_STATE_JSON.tmp.$$"
 }
 
 # ---------- 锁 ----------

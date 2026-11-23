@@ -47,6 +47,10 @@ cmd_status() {
 cmd_check() {
     config_load
     mkdir -p "$WORK"
+    # 并发 check 会同时写 state/manifest：用文件锁串行（flock 可用时）
+    if command -v flock >/dev/null 2>&1; then
+        exec 9>"$FWU_ROOT/check.lock" 2>/dev/null && flock 9
+    fi
     rm -f "$WORK/manifest.json"
     log "开始检测：provider=$C_PROVIDER channel=$C_CHANNEL"
     state_replace "phase=checking" "last_result=none" "detail=正在检测" "job_id=$(date +%s)-$$"
@@ -59,6 +63,7 @@ cmd_check() {
 
     verify_manifest_sig "$WORK/manifest.json" "$WORK/manifest.json.sig"
     manifest_load "$WORK/manifest.json"
+    [ "$M_SCHEMA" = "1" ] || die "$EX_VERIFY" "清单 schema=$M_SCHEMA 不受支持（本版本只支持 1）"
     asset_require_roles
     identity_gate
     version_gate
@@ -93,14 +98,24 @@ cmd_check() {
         "$(jesc "$(local_version)")" "$(jesc "$M_VERSION")" "${M_BUILD_TS:-0}" "${M_ASSET_COUNT:-0}" "$IDENTITY_RESULT"
 }
 
-# 清单必须同时给出 rootfs 与 boot：少一个就是半套固件，检测阶段就该停
+# 清单必须同时给出 rootfs 与 boot，且关键字段格式合法；少一个/写错一个都在检测阶段停
 asset_require_roles() {
     _kinds=""
     _i=0
     _n=${M_ASSET_COUNT:-0}
     while [ "$_i" -lt "$_n" ]; do
         _k=$(asset_get "$_i" kind)
-        [ -n "$_k" ] && _kinds="$_kinds,$_k"
+        [ -n "$_k" ] || die "$EX_VERIFY" "第 $_i 个资产缺少 kind"
+        _kinds="$_kinds,$_k"
+        case "$_k" in
+            rootfs|boot)
+                _sz=$(asset_get "$_i" size)
+                case "$_sz" in ''|*[!0-9]*|0) die "$EX_VERIFY" "资产 $_k 的 size 非法（$_sz）" ;; esac
+                _sha=$(asset_get "$_i" sha256)
+                printf '%s' "$_sha" | grep -Eq '^[0-9a-f]{64}$' ||
+                    die "$EX_VERIFY" "资产 $_k 的 sha256 不是 64 位小写 hex"
+                ;;
+        esac
         _i=$((_i + 1))
     done
     case ",$_kinds," in *,rootfs,*) : ;; *) die "$EX_VERIFY" "清单缺少 rootfs 资产（role/kind 必须声明）" ;; esac
