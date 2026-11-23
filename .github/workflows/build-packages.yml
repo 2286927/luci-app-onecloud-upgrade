@@ -3,12 +3,10 @@ name: build-packages
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
     paths:
       - 'package/**'
       - '.github/workflows/build-packages.yml'
-  push:
-    tags:
-      - 'v*'
   pull_request:
   workflow_dispatch:
 
