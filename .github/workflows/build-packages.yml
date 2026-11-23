@@ -53,20 +53,19 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: 收集产物
+      - name: 收集产物（只取本仓 5 个包）
         working-directory: sdk
         run: |
           set -e
           mkdir -p "$GITHUB_WORKSPACE/out"
-          find bin/packages -type f \( -name '*.apk' -o -name '*.ipk' \) -exec cp -v {} "$GITHUB_WORKSPACE/out/" \;
+          for n in fwupgrade-core fwupgrade-provider-github fwupgrade-flasher-onecloud fwupgrade-flasher-dryrun luci-app-onecloud-upgrade; do
+            f=$(find bin/packages -type f -name "${n}-*.apk" | head -n 1)
+            [ -n "$f" ] || { echo "::error::缺少产物：$n"; exit 1; }
+            cp -v "$f" "$GITHUB_WORKSPACE/out/"
+          done
           echo "--- 产物 ---"
           ls -lh "$GITHUB_WORKSPACE/out"
-          test "$(ls -1 "$GITHUB_WORKSPACE/out" | wc -l)" -ge 5 || { echo "::error::产物少于 5 个"; exit 1; }
-          echo "--- 元数据 ---"
-          for f in "$GITHUB_WORKSPACE"/out/*.apk; do
-            echo "== $(basename "$f")"
-            tar -xOf "$f" .PKGINFO 2>/dev/null | grep -E '^(pkgname|pkgver|arch|depend)' || tar -xOf "$f" .PKGINFO 2>/dev/null | head -5 || true
-          done
+          test "$(ls -1 "$GITHUB_WORKSPACE/out" | wc -l)" -eq 5 || { echo "::error::产物数不为 5"; exit 1; }
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
