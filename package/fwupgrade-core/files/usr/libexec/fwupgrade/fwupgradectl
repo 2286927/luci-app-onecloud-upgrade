@@ -58,6 +58,7 @@ cmd_check() {
     }
 
     manifest_load "$WORK/manifest.json"
+    asset_require_roles
     identity_gate
     version_gate
     # 强制重刷：版本相同也放行，但必须在界面上说清楚这是重刷而不是升级
@@ -89,6 +90,21 @@ cmd_check() {
         "$([ "$UPDATE_AVAILABLE" = yes ] && echo true || echo false)" \
         "$UPDATE_AVAILABLE" \
         "$(jesc "$(local_version)")" "$(jesc "$M_VERSION")" "${M_BUILD_TS:-0}" "${M_ASSET_COUNT:-0}" "$IDENTITY_RESULT"
+}
+
+# 清单必须同时给出 rootfs 与 boot：少一个就是半套固件，检测阶段就该停
+asset_require_roles() {
+    _kinds=""
+    _i=0
+    _n=${M_ASSET_COUNT:-0}
+    while [ "$_i" -lt "$_n" ]; do
+        _k=$(asset_get "$_i" kind)
+        [ -n "$_k" ] && _kinds="$_kinds,$_k"
+        _i=$((_i + 1))
+    done
+    case ",$_kinds," in *,rootfs,*) : ;; *) die "$EX_VERIFY" "清单缺少 rootfs 资产（role/kind 必须声明）" ;; esac
+    case ",$_kinds," in *,boot,*) : ;; *) die "$EX_VERIFY" "清单缺少 boot 资产（半套固件不允许升级）" ;; esac
+    log "资产完整性通过：rootfs + boot 均在清单中"
 }
 
 identity_gate() {
@@ -174,8 +190,10 @@ space_gate() {
     _margin=$((_need / 7))
     [ "$_margin" -ge $((32 * 1024 * 1024)) ] || _margin=$((32 * 1024 * 1024))
     _total=$((_need + _margin))
-    _free=$(free_kb /opt)
-    case "$_free" in ''|*[!0-9]*) die "$EX_SPACE" "无法读取 /opt 可用空间" ;; esac
+    # 默认检查 /opt（升级包与备份都落这里）；测试可用 FWU_SPACE_PATH 指向别处
+    _sp="${FWU_SPACE_PATH:-/opt}"
+    _free=$(free_kb "$_sp")
+    case "$_free" in ''|*[!0-9]*) die "$EX_SPACE" "无法读取 $_sp 可用空间" ;; esac
     _freeb=$((_free * 1024))
     if [ "$_freeb" -lt "$_total" ]; then
         die "$EX_SPACE" "空间不足：需要 $((_total / 1024 / 1024)) MiB，可用 $((_freeb / 1024 / 1024)) MiB"

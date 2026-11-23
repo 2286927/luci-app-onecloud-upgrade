@@ -30,7 +30,7 @@ var callConfigGet = rpc.declare({
 var callConfigSet = rpc.declare({
 	object: 'luci.onecloud-upgrade',
 	method: 'config_set',
-	params: [ 'provider', 'repo', 'asset_rootfs', 'asset_boot', 'channel' ],
+	params: [ 'provider', 'repo', 'asset_rootfs', 'asset_boot', 'channel', 'dry_run', 'force' ],
 	expect: { ok: true }
 });
 
@@ -95,7 +95,8 @@ return view.extend({
 			E('p', { 'id': 'oc-phase' }, '阶段：' + badge(st.phase)),
 			E('p', { 'id': 'oc-current' }, '本机版本：' + (st.current || '—')),
 			E('p', { 'id': 'oc-version' }, '目标版本：' + (st.version || '—')),
-			E('p', { 'id': 'oc-detail' }, '说明：' + (st.detail || '—'))
+			E('p', { 'id': 'oc-detail' }, '说明：' + (st.detail || '—')),
+			E('p', {}, [ '阶段进度：', E('progress', { 'id': 'oc-prog', 'max': 100, 'value': 0, 'style': 'width:240px;vertical-align:middle' }) ])
 		]);
 
 		var form = E('div', { 'class': 'cbi-section' }, [
@@ -123,6 +124,20 @@ return view.extend({
 						E('option', { 'value': 'beta', 'selected': cfg.channel === 'beta' ? '' : null }, 'beta')
 					]))
 			]),
+			E('div', { 'class': 'cbi-value' }, [
+				E('label', { 'class': 'cbi-value-title' }, '演练模式（dry_run）'),
+				E('div', { 'class': 'cbi-value-field' }, [
+					E('input', { 'id': 'oc-dry', 'type': 'checkbox', 'checked': cfg.dry_run === '1' ? '' : null }),
+					E('span', { 'class': 'cbi-value-description' }, ' 勾选时只做预检与阶段模拟，不写盘')
+				])
+			]),
+			E('div', { 'class': 'cbi-value' }, [
+				E('label', { 'class': 'cbi-value-title' }, '强制重刷（force）'),
+				E('div', { 'class': 'cbi-value-field' }, [
+					E('input', { 'id': 'oc-force', 'type': 'checkbox', 'checked': cfg.force === '1' ? '' : null }),
+					E('span', { 'class': 'cbi-value-description' }, ' 同版本也允许重写（高风险）')
+				])
+			]),
 			E('div', { 'class': 'cbi-page-actions' }, [
 				E('button', {
 					'class': 'btn cbi-button cbi-button-save',
@@ -132,7 +147,9 @@ return view.extend({
 							document.getElementById('oc-repo').value,
 							document.getElementById('oc-rootfs').value,
 							document.getElementById('oc-boot').value,
-							document.getElementById('oc-channel').value
+							document.getElementById('oc-channel').value,
+							document.getElementById('oc-dry').checked ? '1' : '0',
+							document.getElementById('oc-force').checked ? '1' : '0'
 						).then(function() { ui.addNotification(null, E('p', {}, '已保存'), 'info'); });
 					})
 				}, '保存')
@@ -237,6 +254,8 @@ return view.extend({
 				document.getElementById('oc-current').textContent = '本机版本：' + (s.current || '—');
 				document.getElementById('oc-version').textContent = '目标版本：' + (s.version || '—');
 				document.getElementById('oc-detail').textContent = '说明：' + (s.detail || '—');
+				var pr = document.getElementById('oc-prog');
+				if (pr) pr.value = s.progress || 0;
 			});
 			callLogTail(40).then(function(r) {
 				if (r && r.lines) document.getElementById('oc-log').textContent = r.lines;

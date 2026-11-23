@@ -50,7 +50,7 @@ FLASHER_PATH="$FWU_LIBDIR/flashers/$FLASHER.sh"
 }
 
 lock_update_phase applying
-state_replace "phase=applying" "last_result=none" "job_id=$JOB" \
+state_replace "phase=applying" "last_result=none" "job_id=$JOB" "progress=5" \
     "version=$M_VERSION" "target=$M_TARGET" "detail=执行预检" "updated_at=$(iso_now)"
 
 # shellcheck disable=SC1090
@@ -61,7 +61,7 @@ if ! flasher_preflight; then
     exit "$EX_STATE"
 fi
 
-state_replace "phase=applying" "detail=预检通过，进入写入" "updated_at=$(iso_now)"
+state_replace "phase=applying" "progress=40" "detail=预检通过，进入写入" "updated_at=$(iso_now)"
 
 # L1 安全网：真实写入前先把 /etc/config 备份到可寻址目录；dry-run 不占空间
 if [ "${C_DRY_RUN:-1}" != "1" ]; then
@@ -69,12 +69,12 @@ if [ "${C_DRY_RUN:-1}" != "1" ]; then
         state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" "detail=配置备份失败，已中止"
         exit "$EX_STATE"
     }
-    state_replace "phase=applying" "detail=配置已备份到 backup/$JOB" "updated_at=$(iso_now)"
+    state_replace "phase=applying" "progress=45" "detail=配置已备份到 backup/$JOB" "updated_at=$(iso_now)"
 fi
 
 # 从这一刻起不可逆：先落盘标记，再调用写入。写入成功后设备会重启，本进程随之中断。
 lock_update_phase writing_boot
-state_replace "phase=writing_boot" "detail=正在写入（boot 为最后一步）" "updated_at=$(iso_now)"
+state_replace "phase=writing_boot" "progress=70" "detail=正在写入（boot 为最后一步）" "updated_at=$(iso_now)"
 
 flasher_apply
 _rc=$?
@@ -82,7 +82,7 @@ _rc=$?
 if [ "$_rc" -eq 0 ]; then
     if [ "$FLASHER" = "dryrun" ]; then
         # dry-run 不写盘、不重启，直接收尾；不能套用「写成功未重启」的判定
-        state_replace "phase=idle" "last_result=ok" "code=0" \
+        state_replace "phase=idle" "last_result=ok" "code=0" "progress=100" \
             "detail=dry-run 完成（未写盘）" "updated_at=$(iso_now)"
         exit 0
     fi
