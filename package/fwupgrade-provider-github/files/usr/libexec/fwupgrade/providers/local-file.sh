@@ -6,6 +6,7 @@ provider_resolve() {
     if [ -d "$C_BASE" ]; then
         [ -s "$C_BASE/manifest.json" ] || die "$EX_VERIFY" "$C_BASE/manifest.json 不存在"
         cp -f "$C_BASE/manifest.json" "$_work/manifest.json" || die "$EX_STATE" "复制清单失败"
+        [ -f "$C_BASE/manifest.json.sig" ] && cp -f "$C_BASE/manifest.json.sig" "$_work/manifest.json.sig"
         printf '%s' "$C_BASE" >"$_work/base"
     elif [ -f "$C_BASE" ]; then
         cp -f "$C_BASE" "$_work/manifest.json" || die "$EX_STATE" "复制清单失败"

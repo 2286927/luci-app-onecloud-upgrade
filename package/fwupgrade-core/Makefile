@@ -34,6 +34,8 @@ define Package/fwupgrade-core/install
 	$(INSTALL_CONF) ./files/etc/config/onecloud-upgrade $(1)/etc/config/
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/etc/init.d/fwupgrade $(1)/etc/init.d/
+	$(INSTALL_DIR) $(1)/etc/fwupgrade
+	$(INSTALL_DATA) ./files/etc/fwupgrade/pubkey.oc-2026 $(1)/etc/fwupgrade/
 endef
 
 $(eval $(call BuildPackage,fwupgrade-core))

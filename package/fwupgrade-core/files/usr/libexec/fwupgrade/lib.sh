@@ -69,6 +69,31 @@ free_kb() {
     df -k "$1" 2>/dev/null | awk 'END{print $4}'
 }
 
+# 单次取件（不重试），用于镜像回退时快速切换
+http_fetch_once() {
+    _url="$1"; _out="$2"
+    if command -v uclient-fetch >/dev/null 2>&1; then
+        uclient-fetch -q -T 25 -O "$_out" "$_url" 2>/dev/null && return 0
+    elif command -v curl >/dev/null 2>&1; then
+        curl -fsSL --max-time 25 -o "$_out" "$_url" 2>/dev/null && return 0
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -T 25 -O "$_out" "$_url" 2>/dev/null && return 0
+    fi
+    return 1
+}
+
+# 带镜像回退的资产取件：直连失败后依次尝试镜像前缀
+http_fetch_asset() {
+    _url="$1"; _out="$2"
+    http_fetch_once "$_url" "$_out" && return 0
+    log "直连失败，尝试镜像：$_url"
+    for _m in ${C_MIRROR:-} https://gh-proxy.org https://gh-proxy.com; do
+        [ -n "$_m" ] || continue
+        http_fetch_once "${_m%/}/$_url" "$_out" && { log "镜像命中：$_m"; return 0; }
+    done
+    return "$EX_DL"
+}
+
 # 统一 HTTP 取件：优先 uclient-fetch（OpenWrt 自带），退 curl / wget；4xx 不重试
 http_fetch() {
     _url="$1"; _out="$2"; _tries=0
@@ -308,6 +333,25 @@ asset_get() {
     mget "ASSET_$1_$(printf '%s' "$2" | tr 'a-z' 'A-Z')"
 }
 
+# ---------- 签名 ----------
+# 规则：有 .sig 就必须验；require_signature=1 时没有 .sig 直接拒绝。
+verify_manifest_sig() {
+    _m="$1"; _sig="$2"
+    if [ ! -s "$_sig" ]; then
+        if [ "${C_REQUIRE_SIG:-0}" = "1" ]; then
+            die "$EX_VERIFY" "本通道要求签名，但清单缺少 manifest.json.sig"
+        fi
+        log "清单未签名（require_signature=0，继续）"
+        return 0
+    fi
+    command -v usign >/dev/null 2>&1 || die "$EX_VERIFY" "缺少 usign，无法校验清单签名"
+    _key=$(ls /etc/fwupgrade/pubkey.* 2>/dev/null | head -n 1)
+    [ -n "$_key" ] || die "$EX_VERIFY" "未找到公钥 /etc/fwupgrade/pubkey.*"
+    usign -V -p "$_key" -x "$_sig" -m "$_m" 2>/dev/null ||
+        die "$EX_VERIFY" "清单签名校验失败（公钥 $(basename "$_key")）"
+    log "清单签名校验通过：$(basename "$_key")"
+}
+
 # ---------- 版本 ----------
 # 本机版本 26.11.18_16.27.30（YY.MM.DD_HH.MM.SS，零填充，可直接字符串比较）
 local_version() {
@@ -352,6 +396,8 @@ config_load() {
     C_DRY_RUN=$(conf_get dry_run) || C_DRY_RUN="1"
     C_FORCE=$(conf_get force) || C_FORCE="0"
     [ -n "$C_FORCE" ] || C_FORCE="0"
+    C_REQUIRE_SIG=$(conf_get require_signature) || C_REQUIRE_SIG="0"
+    [ -n "$C_REQUIRE_SIG" ] || C_REQUIRE_SIG="0"
     [ -n "$C_DRY_RUN" ] || C_DRY_RUN="1"
 
     case "$C_PROVIDER" in

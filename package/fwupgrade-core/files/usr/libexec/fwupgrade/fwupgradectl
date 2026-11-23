@@ -57,6 +57,7 @@ cmd_check() {
         exit "$rc"
     }
 
+    verify_manifest_sig "$WORK/manifest.json" "$WORK/manifest.json.sig"
     manifest_load "$WORK/manifest.json"
     asset_require_roles
     identity_gate
@@ -529,10 +530,10 @@ cmd_clean() {
 
 cmd_config() {
     config_load
-    printf '{"provider":"%s","repo":"%s","base_url":"%s","asset_rootfs":"%s","asset_boot":"%s","channel":"%s","dry_run":"%s","force":"%s","mirror":"%s","token":"%s"}\n' \
+    printf '{"provider":"%s","repo":"%s","base_url":"%s","asset_rootfs":"%s","asset_boot":"%s","channel":"%s","dry_run":"%s","force":"%s","require_signature":"%s","mirror":"%s","token":"%s"}\n' \
         "$(jesc "$C_PROVIDER")" "$(jesc "$C_REPO")" "$(jesc "$C_BASE")" \
         "$(jesc "$C_ASSET_ROOTFS")" "$(jesc "$C_ASSET_BOOT")" "$(jesc "$C_CHANNEL")" \
-        "${C_DRY_RUN:-1}" "${C_FORCE:-0}" "$(jesc "$C_MIRROR")" "$([ -n "$C_TOKEN_FILE" ] && echo configured || echo none)"
+        "${C_DRY_RUN:-1}" "${C_FORCE:-0}" "${C_REQUIRE_SIG:-0}" "$(jesc "$C_MIRROR")" "$([ -n "$C_TOKEN_FILE" ] && echo configured || echo none)"
 }
 
 # flasher 名从清单读，缺省 onecloud

@@ -30,7 +30,7 @@ var callConfigGet = rpc.declare({
 var callConfigSet = rpc.declare({
 	object: 'luci.onecloud-upgrade',
 	method: 'config_set',
-	params: [ 'provider', 'repo', 'asset_rootfs', 'asset_boot', 'channel', 'dry_run', 'force' ],
+	params: [ 'provider', 'repo', 'asset_rootfs', 'asset_boot', 'channel', 'dry_run', 'force', 'require_signature' ],
 	expect: { ok: true }
 });
 
@@ -132,6 +132,13 @@ return view.extend({
 				])
 			]),
 			E('div', { 'class': 'cbi-value' }, [
+				E('label', { 'class': 'cbi-value-title' }, '要求签名（require_signature）'),
+				E('div', { 'class': 'cbi-value-field' }, [
+					E('input', { 'id': 'oc-sig', 'type': 'checkbox', 'checked': cfg.require_signature === '1' ? '' : null }),
+					E('span', { 'class': 'cbi-value-description' }, ' 清单必须带有效签名，否则拒绝升级')
+				])
+			]),
+			E('div', { 'class': 'cbi-value' }, [
 				E('label', { 'class': 'cbi-value-title' }, '强制重刷（force）'),
 				E('div', { 'class': 'cbi-value-field' }, [
 					E('input', { 'id': 'oc-force', 'type': 'checkbox', 'checked': cfg.force === '1' ? '' : null }),
@@ -149,7 +156,8 @@ return view.extend({
 							document.getElementById('oc-boot').value,
 							document.getElementById('oc-channel').value,
 							document.getElementById('oc-dry').checked ? '1' : '0',
-							document.getElementById('oc-force').checked ? '1' : '0'
+							document.getElementById('oc-force').checked ? '1' : '0',
+							document.getElementById('oc-sig').checked ? '1' : '0'
 						).then(function() { ui.addNotification(null, E('p', {}, '已保存'), 'info'); });
 					})
 				}, '保存')

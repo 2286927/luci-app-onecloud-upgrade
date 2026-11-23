@@ -5,6 +5,9 @@
 首个候选发布版本（rc1）。仅支持 OneCloud（ImmortalWrt 25.12 / apk / ucode LuCI），不承诺跨机型。
 
 ### 新增
+- **清单签名**：usign(ed25519)  detached 签名，公钥随包安装；`require_signature=1` 时无签名/验签失败直接拒绝。
+- 资产获取带镜像回退（直连失败依次尝试 `gh-proxy.org` / `gh-proxy.com`）。
+- `tools/gen_manifest.py`：按 Release 资产生成 manifest（含 target/board/asset sha256）。
 - `fwupgrade-core`：状态机、设备侧单实例锁、清单解析、版本判定、配置备份、L1 回滚、诊断包。
 - `fwupgrade-provider-github`：GitHub Release（stable）、静态 HTTPS、本地文件三种源。
 - `fwupgrade-flasher-onecloud`：委托现网 `/usr/bin/upgrade`，支持 `--force`；`fwupgrade-flasher-dryrun` 用于不写盘验证。
@@ -26,4 +29,4 @@
 - 测试：32 条单测 + 10 条设备侧判定测试。
 
 ### 已知限制
-- 未验签；只支持 stable 通道；界面仅中文（i18n 未做）；故障矩阵已覆盖 9/24 条。
+- 签名默认不强制（`require_signature=0`）；只支持 stable 通道；界面仅中文（i18n 未做）；故障矩阵已覆盖 9/24 条。

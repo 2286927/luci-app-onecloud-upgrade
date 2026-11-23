@@ -7,7 +7,7 @@ CTL=/usr/libexec/fwupgrade/fwupgradectl
 
 list_methods() {
     cat <<'EOF'
-{"status":{},"check":{},"apply":{"confirm":"string"},"config_get":{},"config_set":{"provider":"string","repo":"string","base_url":"string","asset_rootfs":"string","asset_boot":"string","channel":"string","dry_run":"string","force":"string"},"log_tail":{"lines":"integer"},"backups":{},"diag":{},"rollback":{"id":"string","mode":"string"},"forget":{"id":"string"}}
+{"status":{},"check":{},"apply":{"confirm":"string"},"config_get":{},"config_set":{"provider":"string","repo":"string","base_url":"string","asset_rootfs":"string","asset_boot":"string","channel":"string","dry_run":"string","force":"string","require_signature":"string"},"log_tail":{"lines":"integer"},"backups":{},"diag":{},"rollback":{"id":"string","mode":"string"},"forget":{"id":"string"}}
 EOF
 }
 
@@ -44,7 +44,7 @@ case "$_METHOD" in
         ;;
     config_set)
         _params=$(cat)
-        for _k in provider repo base_url asset_rootfs asset_boot channel dry_run force; do
+        for _k in provider repo base_url asset_rootfs asset_boot channel dry_run force require_signature; do
             _v=$(printf '%s' "$_params" | jsonfilter -e "@.$_k" 2>/dev/null)
             [ -n "$_v" ] || continue
             case "$_k" in
@@ -54,7 +54,7 @@ case "$_METHOD" in
                 channel)
                     case "$_v" in stable|beta|dev) : ;; *) _v="" ;; esac
                     ;;
-                dry_run|force)
+                dry_run|force|require_signature)
                     case "$_v" in 0|1) : ;; *) _v="" ;; esac
                     ;;
             esac

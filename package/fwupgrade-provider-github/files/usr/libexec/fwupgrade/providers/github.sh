@@ -33,20 +33,25 @@ provider_resolve() {
     [ -n "$_ver" ] || _ver="$_tag"
 
     # 优先使用 release 自带的 manifest.json
-    _murl=""
+    _murl=""; _surl=""
     _n=$(rget ASSET_COUNT)
     _i=0
     while [ "$_i" -lt "${_n:-0}" ]; do
         _an=$(rget "ASSET_${_i}_NAME")
         case "$_an" in
             manifest.json) _murl=$(rget "ASSET_${_i}_URL") ;;
+            manifest.json.sig) _surl=$(rget "ASSET_${_i}_URL") ;;
         esac
         _i=$((_i + 1))
     done
 
     if [ -n "$_murl" ]; then
         log "使用 release 内的 manifest.json"
-        http_fetch "$_murl" "$_work/manifest.json" || die "$EX_DL" "取 manifest.json 失败"
+        http_fetch_asset "$_murl" "$_work/manifest.json" || die "$EX_DL" "取 manifest.json 失败"
+        if [ -n "$_surl" ]; then
+            http_fetch_asset "$_surl" "$_work/manifest.json.sig" || die "$EX_DL" "取 manifest.json.sig 失败"
+            log "清单签名已下载"
+        fi
         dirname_url "$_murl" >"$_work/base"
         return 0
     fi
