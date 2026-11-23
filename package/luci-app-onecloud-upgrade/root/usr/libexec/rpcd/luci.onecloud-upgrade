@@ -7,7 +7,7 @@ CTL=/usr/libexec/fwupgrade/fwupgradectl
 
 list_methods() {
     cat <<'EOF'
-{"status":{},"check":{},"apply":{"confirm":"string"},"config_get":{},"config_set":{"provider":"string","repo":"string","base_url":"string","asset_rootfs":"string","asset_boot":"string","channel":"string","dry_run":"string"},"log_tail":{"lines":"integer"},"backups":{},"diag":{},"rollback":{"id":"string","mode":"string"},"forget":{"id":"string"}}
+{"status":{},"check":{},"apply":{"confirm":"string"},"config_get":{},"config_set":{"provider":"string","repo":"string","base_url":"string","asset_rootfs":"string","asset_boot":"string","channel":"string","dry_run":"string","force":"string"},"log_tail":{"lines":"integer"},"backups":{},"diag":{},"rollback":{"id":"string","mode":"string"},"forget":{"id":"string"}}
 EOF
 }
 
