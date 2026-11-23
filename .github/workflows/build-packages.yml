@@ -1,0 +1,76 @@
+name: build-packages
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'package/**'
+      - '.github/workflows/build-packages.yml'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 释放磁盘
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - name: 下载 OpenWrt 25.12 x86/64 SDK
+        run: |
+          set -e
+          URL="https://downloads.openwrt.org/releases/25.12.0/targets/x86/64/openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
+          curl -fL --retry 3 --retry-delay 5 -o sdk.tar.zst "$URL"
+          ls -lh sdk.tar.zst
+          mkdir -p sdk
+          tar -I zstd -xf sdk.tar.zst -C sdk --strip-components=1
+          ls sdk | head
+
+      - name: 注入本仓包并更新 feeds
+        working-directory: sdk
+        run: |
+          set -e
+          test -d "$GITHUB_WORKSPACE/package" || { echo "::error::package/ 不存在"; exit 1; }
+          cp -a "$GITHUB_WORKSPACE/package" ./package/oc-upgrade
+          find package/oc-upgrade -maxdepth 2 -name Makefile | sort
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          make defconfig
+
+      - name: 逐个编译 5 个包
+        working-directory: sdk
+        run: |
+          set -e
+          for p in fwupgrade-core fwupgrade-provider-github fwupgrade-flasher-onecloud fwupgrade-flasher-dryrun luci-app-onecloud-upgrade; do
+            echo "::group::build $p"
+            make package/oc-upgrade/$p/compile V=s
+            echo "::endgroup::"
+          done
+
+      - name: 收集产物
+        working-directory: sdk
+        run: |
+          set -e
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          find bin/packages -type f \( -name '*.apk' -o -name '*.ipk' \) -exec cp -v {} "$GITHUB_WORKSPACE/out/" \;
+          echo "--- 产物 ---"
+          ls -lh "$GITHUB_WORKSPACE/out"
+          test "$(ls -1 "$GITHUB_WORKSPACE/out" | wc -l)" -ge 5 || { echo "::error::产物少于 5 个"; exit 1; }
+          echo "--- 元数据 ---"
+          for f in "$GITHUB_WORKSPACE"/out/*.apk; do
+            echo "== $(basename "$f")"
+            tar -xOf "$f" .PKGINFO 2>/dev/null | grep -E '^(pkgname|pkgver|arch|depend)' || tar -xOf "$f" .PKGINFO 2>/dev/null | head -5 || true
+          done
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: onecloud-upgrade-packages
+          path: out/*
+          if-no-files-found: error
