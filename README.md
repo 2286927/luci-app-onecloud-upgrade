@@ -3,6 +3,26 @@
 OneCloud 专用在线升级 LuCI 应用。范围只针对 OneCloud，**不承诺跨机型**；「通用」只指跨用户、跨仓库、跨自编译固件。
 
 
+## 构建与产物（CI）
+
+`.github/workflows/build-packages.yml` 在公开仓的 Actions 里跑，不占私有额度：
+
+- 下载 OpenWrt **25.12.0 x86/64 SDK**，把本仓 `package/` 注入 `package/oc-upgrade`；
+- `feeds update/install` 后逐个 `make package/oc-upgrade/<pkg>/compile`；
+- 只收集本仓 5 个包，数量不为 5 直接失败；产物上传为 artifact `onecloud-upgrade-packages`。
+
+**已跑通**（2026-11-23）：5 个 apk 全部产出，`arch:noarch`，合计约 29 KB：
+
+| 包 | 大小 |
+|---|---|
+| fwupgrade-core | 16 KB |
+| fwupgrade-provider-github | 3.6 KB |
+| fwupgrade-flasher-onecloud | 2.2 KB |
+| fwupgrade-flasher-dryrun | 1.5 KB |
+| luci-app-onecloud-upgrade | 5.6 KB |
+
+> SDK 日志里 `ucode` / `ucode-mod-fs` / `ucode-mod-uci` 会报 "has a dependency ... which does not exist"——那是 SDK 包索引不含基础包导致的告警，apk 的 `depend` 字段仍正确，设备上这些包已存在。
+
 ## 作为 OpenWrt feed 使用
 
 本仓同时是一个 feed（5 个包都在 `package/` 下，`scripts/feeds` 会递归扫描）：

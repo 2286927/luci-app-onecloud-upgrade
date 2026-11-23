@@ -16,6 +16,7 @@
 - `clean` 现在同时清理诊断包与回滚临时目录。
 
 ### 工程
+- CI：公开仓内用 OpenWrt 25.12 x86/64 SDK 构建，5 个 apk 全部产出（noarch）；修正 luci 包注册方式（改普通包定义）。
 - 增加 `LICENSE`（GPL-2.0）、`.gitignore`、`.gitattributes`（强制 LF）。
 - 工具脚本不再内置设备地址，必须通过 `OC_HOST` 传入。
 - 测试：32 条单测 + 10 条设备侧判定测试。
