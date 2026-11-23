@@ -6,12 +6,17 @@ on:
     paths:
       - 'package/**'
       - '.github/workflows/build-packages.yml'
+  push:
+    tags:
+      - 'v*'
   pull_request:
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     timeout-minutes: 120
     steps:
       - name: Checkout
@@ -73,3 +78,10 @@ jobs:
           name: onecloud-upgrade-packages
           path: out/*
           if-no-files-found: error
+
+      - name: 附加到 Release（仅 tag）
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.apk
+          prerelease: true

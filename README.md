@@ -49,6 +49,11 @@ make package/luci-app-onecloud-upgrade/compile V=s
 
 `v0.1.0-rc1`：候选发布（pre-release）。已完成：主链路真机验证（含一次真实重刷）、结局判定修复、CI 打包（5 个 noarch apk）、apk 真机安装纳管、6 条关键故障注入、演练/强制开关与阶段进度、页面实测（保存开关、检测、备份表恢复/删除）、安装/救援/兼容文档。剩余：签名（V2）、i18n、完整 24 条故障矩阵（已做 9 条）。
 
+## 下载
+
+预发布产物：<https://github.com/2286927/luci-app-onecloud-upgrade/releases/tag/v0.1.0-rc1>（5 个 apk，`noarch`）。
+打 tag 时 CI 会自动把 apk 附到 Release。
+
 ## Screenshots / 截图
 
 ![备份与回滚](screenshots/backup-and-rollback.jpg)
