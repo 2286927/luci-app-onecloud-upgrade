@@ -2,6 +2,17 @@
 
 OneCloud 专用在线升级 LuCI 应用。范围只针对 OneCloud，**不承诺跨机型**；「通用」只指跨用户、跨仓库、跨自编译固件。
 
+
+## 固件集成（2026-11-23）
+
+已接入固件仓 `2286927/onecloud-25.12-upgrade` 的分支 `feat/oc-upgrade-app`（提交 `97b3918`），**未合并、未触发构建**。
+
+- 包源复制到固件仓 `feeds/oc-upgrade/`（5 个包），构建前由 workflow 复制到 `package/oc-upgrade/`；
+- 配置阶段强选 5 个包，`make defconfig` 后守卫，缺一即构建失败；
+- 用固件自己的 buildroot 构建，产物天然是 `arm_cortex-a5_vfpv4` 目标包，不存在 x86 SDK 的架构/依赖错配问题。
+
+验证方式：Actions 手动 dispatch，`ref=feat/oc-upgrade-app`，日志应出现 `PASS⑰`（包已注入 5 个）与 `PASS⑱`（五包均入选）。
+
 ## 发布状态
 
 `v0.1.0-alpha`：仅内测，**不可公开发布**。已完成：主链路真机验证（含一次真实重刷）、升级结局判定修复、依赖修正、LICENSE/.gitignore/git 历史、设备地址外置。未完成：SDK 构建与安装包验证、故障注入、UI 模式开关与进度、签名。详见 `docs/发布评估-20261123.md`。
