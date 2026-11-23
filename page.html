@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-cn" data-darkmode="true">
+	<head>
+		<meta charset="utf-8">
+		<title>OneCloud | 概览</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta name="darkreader-lock">
+		<link rel="stylesheet" href="/luci-static/bootstrap-dark/cascade.css?v=26.322.27569~476b525">
+		<link rel="stylesheet" media="only screen and (max-device-width: 854px)" href="/luci-static/bootstrap-dark/mobile.css?v=26.322.27569~476b525" />
+		<link rel="icon" href="/luci-static/bootstrap-dark/logo_48.png" sizes="48x48">
+		<link rel="icon" href="/luci-static/bootstrap-dark/logo.svg" sizes="any">
+		<script src="/cgi-bin/luci/admin/translations/zh-cn"></script>
+		<script src="/luci-static/resources/cbi.js?v=26.322.27569~476b525"></script>
+	</head>
+
+	<body class="lang_zh-cn " data-page="admin-status-overview">
+<script src="/luci-static/resources/luci.js?v=26.322.27569~476b525-1794990617"></script>
+<script>
+	L = new LuCI({ "media": "\/luci-static\/bootstrap-dark", "resource": "\/luci-static\/resources", "scriptname": "\/cgi-bin\/luci", "pathinfo": "\/admin\/status\/overview", "documentroot": null, "requestpath": [ "admin", "status", "overview" ], "dispatchpath": [ ], "pollinterval": 5, "ubuspath": "\/ubus\/", "sessionid": null, "token": null, "nodespec": { "satisfied": true, "action": { "type": "template", "path": "admin_status\/index" }, "depends": { "acl": [ "luci-mod-status-index" ] }, "order": 1, "title": "Overview" }, "apply_rollback": 90, "apply_holdoff": 4, "apply_timeout": 5, "apply_display": 1.5, "rollback_token": null });
+</script>
+
+<section hidden>
+	<form method="post" class="cbi-map">
+		<div class="cbi-section">
+			<div class="cbi-section-node">
+				<div class="cbi-value">
+					<label class="cbi-value-title" for="luci_username">用户名</label>
+					<div class="cbi-value-field">
+						<input name="luci_username" id="luci_username" type="text" autocomplete="username" value="root">
+					</div>
+				</div>
+				<div class="cbi-value">
+					<label class="cbi-value-title" for="luci_password">密码</label>
+					<div class="cbi-value-field">
+						<input name="luci_password" id="luci_password" type="password" autocomplete="current-password">
+					</div>
+				</div>
+			</div>
+		</div>
+	</form>
+
+	<hr>
+
+
+	<button class="btn cbi-button-positive important">登录</button>
+</section>
+
+<div id="view">
+	<div class="spinning">加载视图中…</div>
+	<script>
+		L.require('ui').then(function(ui) {
+			ui.instantiateView('bootstrap.sysauth');
+		});
+	</script>
+</div>
+
+
+
+	</body>
+</html>
+
+<!-- Lua compatibility mode active: no -->
