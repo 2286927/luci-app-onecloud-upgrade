@@ -12,5 +12,4 @@ LUCI_PKGARCH:=all
 
 include $(TOPDIR)/feeds/luci/luci.mk
 
-# call BuildPackage - OpenWrt buildroot signature
-$(eval $(call BuildPackage,luci-app-onecloud-upgrade))
+# luci.mk 内部已经调用 BuildPackage，这里不能再调一次，否则重复定义
