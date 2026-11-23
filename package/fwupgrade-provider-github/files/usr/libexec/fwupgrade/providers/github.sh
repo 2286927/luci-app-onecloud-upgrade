@@ -3,7 +3,7 @@
 # 两种模式：
 #   1) release 里带 manifest.json 资产 -> 直接用它（权威，可声明 target/abi）
 #   2) 没有 manifest -> 用配置的两个资产名合成（兼容模式，target 留空，身份校验降级）
-# 本期只做 stable（/releases/latest）；beta/dev 明确报未实现，不静默退化成 stable。
+# stable 走 /releases/latest；beta/dev 走 /releases 列表并取第一个非 draft（通常即 prerelease）。
 
 API_BASE="${API_BASE:-https://api.github.com}"
 
@@ -11,7 +11,10 @@ provider_resolve() {
     _work="$1"
     mkdir -p "$_work" || die "$EX_STATE" "无法创建工作目录 $_work"
 
-    _url="$API_BASE/repos/$C_REPO/releases/latest"
+    case "${C_CHANNEL:-stable}" in
+        beta|dev) _url="$API_BASE/repos/$C_REPO/releases?per_page=5" ;;
+        *)        _url="$API_BASE/repos/$C_REPO/releases/latest" ;;
+    esac
     log "取 release：$_url"
     http_fetch "$_url" "$_work/release.json" || die "$EX_DL" "取 release 失败（$C_REPO）"
 

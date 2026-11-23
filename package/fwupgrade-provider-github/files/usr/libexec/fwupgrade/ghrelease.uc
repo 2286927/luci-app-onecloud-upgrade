@@ -7,6 +7,14 @@ if (raw == null) { printf('ERROR=empty\n'); exit(1); }
 
 let r;
 try { r = json(raw); } catch (e) { printf('ERROR=invalid_json\n'); exit(1); }
+if (type(r) == 'array') {
+    // /releases 返回数组：取第一个非 draft
+    let pick = null;
+    for (let i = 0; i < length(r); i++)
+        if (type(r[i]) == 'object' && !r[i].draft) { pick = r[i]; break; }
+    if (pick == null) { printf('ERROR=no_release\n'); exit(1); }
+    r = pick;
+}
 if (type(r) != 'object') { printf('ERROR=not_release\n'); exit(1); }
 
 function put(k, v) {
