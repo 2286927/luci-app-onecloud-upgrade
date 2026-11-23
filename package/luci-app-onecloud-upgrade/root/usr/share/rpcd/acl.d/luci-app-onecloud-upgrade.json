@@ -27,7 +27,8 @@
    "ubus": {
     "luci.onecloud-upgrade": [
      "apply",
-     "rollback"
+     "rollback",
+     "forget"
     ]
    }
   }

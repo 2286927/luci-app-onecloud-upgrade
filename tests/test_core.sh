@@ -99,5 +99,26 @@ eq "重启但版本不符 → version_mismatch" "$(recover_decide A B 30 1000 11
 eq "重启但记录过期 → stale_record" "$(recover_decide A B 30 5000 4000 'v' 'v' 'v')" "stale_record"
 eq "重启但无记录 → no_record" "$(recover_decide A B 30 5000 '' '' 'v' 'v')" "no_record"
 
+echo "== 删除备份 =="
+FB="./fbtest"; mkdir -p "$FB/b-old/config" "$FB/b-new/config"
+printf 'x\n' >"$FB/b-old/config/a.conf"
+printf 'y\n' >"$FB/b-new/config/a.conf"
+sleep 1; touch "$FB/b-new"   # 确保 b-new 是最新
+_runf(){ FWU_LIBDIR="$LIBDIR" FWU_ROOT="$R2" FWU_BACKUP_ROOT="$FB" FWU_LOCK="$TMP/fb.lock" sh "$CTL" "$@" 2>&1; }
+
+_out=$(_runf forget --confirm b-old)
+printf '%s' "$_out" | grep -q '"ok":true' && ok "删除旧备份成功" || bad "删除旧备份失败：$_out"
+[ ! -d "$FB/b-old" ] && ok "旧备份目录已移除" || bad "旧备份目录仍在"
+
+_out=$(_runf forget --confirm b-new)
+printf '%s' "$_out" | grep -q '最新备份' && ok "最新备份默认受保护" || bad "最新备份未被保护：$_out"
+[ -d "$FB/b-new" ] && ok "受保护时目录保留" || bad "受保护时目录被删"
+
+_out=$(_runf forget --confirm b-new --force)
+printf '%s' "$_out" | grep -q '"ok":true' && ok "--force 可删最新" || bad "--force 删除失败：$_out"
+
+_out=$(_runf forget --confirm ../etc)
+printf '%s' "$_out" | grep -q '非法' && ok "路径穿越被拒" || bad "路径穿越未拒：$_out"
+
 printf '结果: pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

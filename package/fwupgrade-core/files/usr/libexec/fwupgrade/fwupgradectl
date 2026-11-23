@@ -15,6 +15,8 @@ usage() {
   backups [--json]      列出可用的配置备份（本应用备份 + 现网脚本备份）
   diag                  生成脱敏诊断包（不含 /etc/config 内容与任何凭据）
   rollback --confirm <id> [--replace] [--dry-run]
+  forget --confirm <id> [--force]
+                        删除一份备份（最新一份是救援料，必须 --force）
                         从指定备份恢复 /etc/config（默认合并，--replace 为整目录替换）
   recover               开机后判定上次升级结局（由 init.d 调用）
   clean                 清理缓存与旧日志（只删白名单路径）
@@ -451,6 +453,47 @@ cmd_diag() {
         "$(jesc "$_out")" "${_kb:-0}"
 }
 
+cmd_forget() {
+    _confirm=""; _force=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --confirm) _confirm="$2"; shift 2 ;;
+            --force) _force=1; shift ;;
+            *) die "$EX_USAGE" "未知参数：$1" ;;
+        esac
+    done
+    [ -n "$_confirm" ] || die "$EX_USAGE" "必须用 --confirm <备份ID> 二次确认"
+    valid_backup_id "$_confirm" || die "$EX_USAGE" "备份 ID 非法"
+
+    _dir=""
+    for _entry in $(list_backup_dirs); do
+        _d=${_entry#*|}
+        [ "$(basename "$_d")" = "$_confirm" ] && { _dir="$_d"; break; }
+    done
+    [ -n "$_dir" ] || die "$EX_USAGE" "找不到备份：$_confirm"
+
+    # 只允许删白名单根下的目录，且解析后仍必须在该根内（防符号链接逃逸）
+    _real=$(readlink -f "$_dir" 2>/dev/null)
+    [ -n "$_real" ] || die "$EX_STATE" "无法解析备份路径"
+    _root_real=$(readlink -f "$FWU_BACKUP_ROOT" 2>/dev/null)
+    case "$_real" in
+        "$_root_real"/*|/opt/upgrade-backup-*) : ;;
+        *) die "$EX_USAGE" "路径越界，拒绝删除：$_real" ;;
+    esac
+    [ -d "$_real" ] || die "$EX_STATE" "不是目录：$_real"
+
+    # 最新一份是最后的救援料，必须显式 --force
+    _newest=$(ls -dt $(list_backup_dirs | awk -F'|' '{print $2}') 2>/dev/null | head -n 1)
+    _newest_real=$(readlink -f "$_newest" 2>/dev/null)
+    if [ "$_real" = "$_newest_real" ] && [ "$_force" != "1" ]; then
+        die "$EX_USAGE" "拒绝删除最新备份（最后的救援料）；确需删除请加 --force"
+    fi
+
+    rm -rf "$_real" || die "$EX_STATE" "删除失败：$_real"
+    log "备份已删除：$_real（id=$_confirm force=$_force）"
+    printf '{"ok":true,"deleted":"%s","path":"%s"}\n' "$(jesc "$_confirm")" "$(jesc "$_real")"
+}
+
 cmd_clean() {
     _n=0
     for _f in "$FWU_ROOT/cache/rootfs.tar.gz" "$FWU_ROOT/cache/boot.tar.gz"; do
@@ -493,6 +536,7 @@ case "${1:-}" in
     backups) shift; cmd_backups "$@" ;;
     diag) cmd_diag ;;
     rollback) shift; cmd_rollback "$@" ;;
+    forget) shift; cmd_forget "$@" ;;
     recover) cmd_recover ;;
     clean) cmd_clean ;;
     config) cmd_config ;;

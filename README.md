@@ -87,6 +87,12 @@ python3 tools/probe_status.py
 2. **rpcd exec 插件的调用约定是 `list` / `call <method>`**，不是「无参枚举 + 方法名作为 argv[1]」。原来只处理无参，导致对象注册成功但方法列表为空（`ubus call` 返回 253）。
 3. **同一个 rpcd 对象的并发调用会互相卡住**。视图 `load()` 用 `Promise.all([status, config_get])` 会一直转圈；改顺序 `.then()` 即正常。
 
+### 备份管理（v0.1.0-alpha 起）
+
+- 页面「配置备份与回滚」每行有 **恢复** 与 **删除** 两个操作。
+- 删除走 `fwupgradectl forget --confirm <id> [--force]`；只允许删白名单根下的目录，路径解析后仍须在根内（防符号链接逃逸）。
+- **最新一份是最后的救援料，默认拒绝删除**，必须显式 `--force`；页面上的删除按钮不带 force，所以删最新会被拒并提示走命令行。
+
 ### 安全默认
 
 `/etc/config/onecloud-upgrade` 的 `dry_run` 默认为 `1`：即使清单指定真实 flasher，worker 也会强制走 dry-run。**只有显式 `uci set onecloud-upgrade.main.dry_run='0'` 才会真正写盘**。这是 T4 之前的默认闸门。

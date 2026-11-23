@@ -45,6 +45,13 @@ var callBackups = rpc.declare({
 	method: 'backups'
 });
 
+var callForget = rpc.declare({
+	object: 'luci.onecloud-upgrade',
+	method: 'forget',
+	params: [ 'id' ],
+	expect: { ok: true }
+});
+
 var callRollback = rpc.declare({
 	object: 'luci.onecloud-upgrade',
 	method: 'rollback',
@@ -181,7 +188,24 @@ return view.extend({
 									r && r.ok ? '已恢复，重启或 reload 后生效' : '恢复失败，请查看日志'), 'info');
 							});
 						})
-					}, '恢复')
+					}, '恢复'),
+					' ',
+					E('button', {
+						'class': 'btn cbi-button cbi-button-negative',
+						'click': ui.createHandlerFn(self, function() {
+							if (!confirm('永久删除备份 ' + b.id + '？\n\n删除后无法恢复；最新一份是救援料，不会被删除。'))
+								return;
+							return callForget(b.id).then(function(r) {
+								if (r && r.ok) {
+									ui.addNotification(null, E('p', {}, '已删除，刷新页面查看'), 'info');
+									window.setTimeout(function() { location.reload(); }, 800);
+								} else {
+									ui.addNotification(null, E('p', {},
+										'删除被拒绝：最新备份受保护，需在命令行加 --force'), 'warning');
+								}
+							});
+						})
+					}, '删除')
 				])
 			]);
 		});
