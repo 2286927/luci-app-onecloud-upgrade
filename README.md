@@ -47,7 +47,21 @@ make package/luci-app-onecloud-upgrade/compile V=s
 
 ## 发布状态
 
-`v0.1.0-alpha`：可内测。已完成：主链路真机验证（含一次真实重刷）、结局判定修复、CI 打包（5 个 noarch apk）、apk 真机安装纳管、6 条关键故障注入、演练/强制开关与阶段进度、页面实测（保存开关、检测、备份表恢复/删除）、安装/救援/兼容文档。剩余：签名（V2）、i18n、完整 24 条故障矩阵。
+`v0.1.0-alpha`：可内测。已完成：主链路真机验证（含一次真实重刷）、结局判定修复、CI 打包（5 个 noarch apk）、apk 真机安装纳管、6 条关键故障注入、演练/强制开关与阶段进度、页面实测（保存开关、检测、备份表恢复/删除）、安装/救援/兼容文档。剩余：签名（V2）、i18n、完整 24 条故障矩阵（已做 9 条）。
+
+## Screenshots / 截图
+
+![备份与回滚](screenshots/backup-and-rollback.jpg)
+
+（页面为深色主题；状态卡、演练/强制开关、备份表与诊断导出在同一页。）
+
+## English
+
+`luci-app-onecloud-upgrade` is a LuCI application for **OneCloud (Amlogic S805 / meson8b)** running ImmortalWrt 25.12. It wraps the device's built-in `upgrade` script with a configurable firmware source (any GitHub repo, static HTTPS directory or local file), version checks, dry-run mode, config backup/rollback and a redacted diagnostics bundle.
+
+It is **not** a generic sysupgrade frontend: OneCloud has no `IMAGE/sysupgrade`, so the write path is delegated to the vendor script. Packages are `PKGARCH=all` (pure shell/ucode/JS), built in this repo's CI with the OpenWrt 25.12 SDK.
+
+Docs are currently in Chinese: [install](docs/安装与卸载.md), [rescue](docs/救援指引.md), [compatibility](docs/兼容性.md).
 
 ## 现在有什么
 
