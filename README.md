@@ -3,15 +3,19 @@
 OneCloud 专用在线升级 LuCI 应用。范围只针对 OneCloud，**不承诺跨机型**；「通用」只指跨用户、跨仓库、跨自编译固件。
 
 
-## 固件集成（2026-11-23）
+## 作为 OpenWrt feed 使用
 
-已接入固件仓 `2286927/onecloud-25.12-upgrade` 的分支 `feat/oc-upgrade-app`（提交 `97b3918`），**未合并、未触发构建**。
+本仓同时是一个 feed（5 个包都在 `package/` 下，`scripts/feeds` 会递归扫描）：
 
-- 包源复制到固件仓 `feeds/oc-upgrade/`（5 个包），构建前由 workflow 复制到 `package/oc-upgrade/`；
-- 配置阶段强选 5 个包，`make defconfig` 后守卫，缺一即构建失败；
-- 用固件自己的 buildroot 构建，产物天然是 `arm_cortex-a5_vfpv4` 目标包，不存在 x86 SDK 的架构/依赖错配问题。
+```sh
+echo "src-git oc-upgrade https://github.com/2286927/luci-app-onecloud-upgrade.git" >> feeds.conf.default
+./scripts/feeds update oc-upgrade
+./scripts/feeds install -a -p oc-upgrade
+# menuconfig: Utilities → fwupgrade-*；LuCI → Applications → luci-app-onecloud-upgrade
+make package/luci-app-onecloud-upgrade/compile V=s
+```
 
-验证方式：Actions 手动 dispatch，`ref=feat/oc-upgrade-app`，日志应出现 `PASS⑰`（包已注入 5 个）与 `PASS⑱`（五包均入选）。
+固件仓不再内嵌这些包；构建通过 feed 引用本仓。`PKGARCH=all`，产物与目标架构无关，但**最终发布物应由目标 buildroot 构建**（arm_cortex-a5_vfpv4），而不是 x86 SDK。
 
 ## 发布状态
 
