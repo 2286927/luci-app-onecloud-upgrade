@@ -1,0 +1,501 @@
+#!/bin/sh
+# fwupgradectl —— 命令行入口（CLI 与 rpcd 共用；rpcd 只做参数白名单后调用本程序）
+. "${FWU_LIBDIR:-/usr/libexec/fwupgrade}/lib.sh"
+
+WORK="$FWU_ROOT/work"
+mkdir -p "$WORK" "$FWU_ROOT" 2>/dev/null
+
+usage() {
+    cat <<'EOF'
+用法: fwupgradectl <命令> [参数]
+  status                查看当前状态（--json 输出机器可读）
+  check                 检测新版本（不下载）
+  download              预取并校验升级包（调用 flasher 的 prepare）
+  apply --confirm <ver> 执行升级（必须确认目标版本，异步返回 job_id）
+  backups [--json]      列出可用的配置备份（本应用备份 + 现网脚本备份）
+  diag                  生成脱敏诊断包（不含 /etc/config 内容与任何凭据）
+  rollback --confirm <id> [--replace] [--dry-run]
+                        从指定备份恢复 /etc/config（默认合并，--replace 为整目录替换）
+  recover               开机后判定上次升级结局（由 init.d 调用）
+  clean                 清理缓存与旧日志（只删白名单路径）
+  config                查看生效配置（不输出 token）
+EOF
+}
+
+emit() { printf '%s\n' "$1"; }
+
+cmd_status() {
+    case "$(state_get phase)" in
+        applying|writing_boot|boot_written) cmd_recover >/dev/null 2>&1 ;;
+    esac
+    if [ "${1:-}" = "--json" ] && [ -s "$FWU_STATE_JSON" ]; then
+        cat "$FWU_STATE_JSON"
+        return 0
+    fi
+    printf '阶段      : %s\n' "$(state_get phase)"
+    printf '上次结果  : %s\n' "$(state_get last_result)"
+    printf '混合态    : %s\n' "$(state_get mixed_state)"
+    printf '本机版本  : %s\n' "$(local_version)"
+    printf '目标版本  : %s\n' "$(state_get version)"
+    printf '目标平台  : %s\n' "$(state_get target)"
+    printf '最近更新  : %s\n' "$(state_get updated_at)"
+    printf '说明      : %s\n' "$(state_get detail)"
+}
+
+cmd_check() {
+    config_load
+    mkdir -p "$WORK"
+    rm -f "$WORK/manifest.json"
+    log "开始检测：provider=$C_PROVIDER channel=$C_CHANNEL"
+    state_replace "phase=checking" "last_result=none" "detail=正在检测" "job_id=$(date +%s)-$$"
+
+    sh "$FWU_LIBDIR/providers/$(provider_file "$C_PROVIDER").sh" resolve "$WORK" || {
+        rc=$?
+        state_replace "phase=idle" "last_result=failed" "code=$rc" "detail=取清单失败"
+        exit "$rc"
+    }
+
+    manifest_load "$WORK/manifest.json"
+    identity_gate
+    version_gate
+    # 强制重刷：版本相同也放行，但必须在界面上说清楚这是重刷而不是升级
+    if [ "${C_FORCE:-0}" = "1" ]; then
+        log "force=1：允许同版本重刷"
+        UPDATE_AVAILABLE="force"
+    fi
+    space_gate
+
+    if [ "$UPDATE_AVAILABLE" = "force" ]; then
+        state_replace "phase=ready" "last_result=ok" "code=0" \
+            "current=$(local_version)" "version=$M_VERSION" "target=$M_TARGET" \
+            "detail=强制重刷模式：将重写同版本 $M_VERSION" "updated_at=$(iso_now)"
+    elif [ "$UPDATE_AVAILABLE" = "yes" ]; then
+        state_replace "phase=ready" "last_result=ok" "code=0" \
+            "current=$(local_version)" "version=$M_VERSION" "target=$M_TARGET" \
+            "detail=发现新版本 $M_VERSION（build_ts=$M_BUILD_TS）" "updated_at=$(iso_now)"
+    elif [ "$UPDATE_AVAILABLE" = "unknown" ]; then
+        state_replace "phase=idle" "last_result=ok" "code=0" \
+            "current=$(local_version)" "version=$M_VERSION" "target=$M_TARGET" \
+            "detail=版本无法比较（清单版本不规范且缺构建时间），需修正清单或强制重刷" "updated_at=$(iso_now)"
+    else
+        state_replace "phase=idle" "last_result=ok" "code=0" \
+            "current=$(local_version)" "version=$M_VERSION" "target=$M_TARGET" \
+            "detail=已是最新（$M_VERSION）" "updated_at=$(iso_now)"
+    fi
+
+    printf '{"ok":true,"update_available":%s,"comparison":"%s","current":"%s","available":"%s","build_ts":%s,"assets":%s,"identity":"%s"}\n' \
+        "$([ "$UPDATE_AVAILABLE" = yes ] && echo true || echo false)" \
+        "$UPDATE_AVAILABLE" \
+        "$(jesc "$(local_version)")" "$(jesc "$M_VERSION")" "${M_BUILD_TS:-0}" "${M_ASSET_COUNT:-0}" "$IDENTITY_RESULT"
+}
+
+identity_gate() {
+    IDENTITY_RESULT="unverified"
+    _mt=$(mget TARGET_0_TARGET)
+    if [ -z "$_mt" ]; then
+        log "清单未声明 target，跳过身份校验（兼容模式）"
+        IDENTITY_RESULT="no_target_in_manifest"
+        return 0
+    fi
+    _local=$(sed -n "s/^DISTRIB_TARGET='\(.*\)'/\1/p" /etc/openwrt_release 2>/dev/null)
+    [ "$_mt" = "$_local" ] || die "$EX_NET" "目标平台不符：清单=$_mt 本机=$_local"
+
+    _compat=$(mget TARGET_0_COMPAT)
+    [ -n "$_compat" ] || { IDENTITY_RESULT="target_ok"; return 0; }
+
+    _dt=$(tr '\0' '\n' < /proc/device-tree/compatible 2>/dev/null | tr '\n' ',' )
+    _oldifs=$IFS
+    IFS=,
+    for _c in $_compat; do
+        [ -n "$_c" ] || continue
+        case ",$_dt" in
+            *"$_c"*) IDENTITY_RESULT="target_ok+compatible_ok"; IFS=$_oldifs; return 0 ;;
+        esac
+    done
+    IFS=$_oldifs
+    die "$EX_NET" "设备树不匹配：清单=$_compat 本机=$_dt"
+}
+
+version_gate() {
+    UPDATE_AVAILABLE="no"
+    _lv=$(local_version)
+    _mv="$M_VERSION"
+    _nv=$(norm_version "$_mv")
+
+    if [ -z "$_lv" ]; then
+        log "本机缺少 /etc/oc-version，无法比较版本"
+        UPDATE_AVAILABLE="unknown"
+        return 0
+    fi
+
+    # 版本字符串是零填充的 YY.MM.DD_HH.MM.SS，可直接字典序比较。
+    # 它比 build_ts 更可信：released 的 published_at 是「发布时间」，不是「构建时间」，
+    # 两者混用会把「晚发布但更旧的构建」误判成新版本。
+    if [ -n "$_nv" ]; then
+        ver_gt "$_nv" "$_lv" && UPDATE_AVAILABLE="yes"
+        return 0
+    fi
+
+    # 版本号不规范时，退回 build_ts；本机 ts 不可信就不用它
+    _local_ts=$(version_to_ts "$_lv")
+    _remote_ts="${M_BUILD_TS:-0}"
+    case "$_local_ts" in ''|*[!0-9]*) UPDATE_AVAILABLE="unknown"; return 0 ;; esac
+    case "$_remote_ts" in ''|*[!0-9]*|0) UPDATE_AVAILABLE="unknown"; return 0 ;; esac
+    _now=$(date +%s)
+    if [ "$_local_ts" -lt $((_now - 94608000)) ] || [ "$_local_ts" -gt $((_now + 31536000)) ]; then
+        log "本机构建时间不可信（$_local_ts），不参与比较"
+        UPDATE_AVAILABLE="unknown"
+        return 0
+    fi
+    [ "$_remote_ts" -gt "$_local_ts" ] && UPDATE_AVAILABLE="yes"
+}
+
+# 26.11.18_16.27.30 -> epoch（失败返回空）
+version_to_ts() {
+    _d=$(printf '%s' "$1" | sed -n 's/^\([0-9][0-9]\)\.\([0-9][0-9]\)\.\([0-9][0-9]\)_\([0-9][0-9]\)\.\([0-9][0-9]\)\.\([0-9][0-9]\)$/20\1-\2-\3 \4:\5:\6/p')
+    [ -n "$_d" ] || return 1
+    date -d "$_d" +%s 2>/dev/null
+}
+
+space_gate() {
+    _need=0
+    _n=${M_ASSET_COUNT:-0}
+    _i=0
+    while [ "$_i" -lt "$_n" ]; do
+        _sz=$(asset_get "$_i" size)
+        case "$_sz" in ''|*[!0-9]*) _sz=0 ;; esac
+        _need=$((_need + _sz))
+        _i=$((_i + 1))
+    done
+    # 清单没给大小时按保守值估；绝不"差不多就试"
+    [ "$_need" -gt 0 ] || _need=$((180 * 1024 * 1024))
+    _margin=$((_need / 7))
+    [ "$_margin" -ge $((32 * 1024 * 1024)) ] || _margin=$((32 * 1024 * 1024))
+    _total=$((_need + _margin))
+    _free=$(free_kb /opt)
+    case "$_free" in ''|*[!0-9]*) die "$EX_SPACE" "无法读取 /opt 可用空间" ;; esac
+    _freeb=$((_free * 1024))
+    if [ "$_freeb" -lt "$_total" ]; then
+        die "$EX_SPACE" "空间不足：需要 $((_total / 1024 / 1024)) MiB，可用 $((_freeb / 1024 / 1024)) MiB"
+    fi
+    log "空间检查通过：需要 $((_total / 1024 / 1024)) MiB，可用 $((_freeb / 1024 / 1024)) MiB"
+}
+
+cmd_download() {
+    config_load
+    [ "$(state_get phase)" = "ready" ] || die "$EX_STATE" "当前阶段不是 ready，先执行 check"
+    manifest_load "$WORK/manifest.json"
+    resolve_flasher
+    sh "$FWU_LIBDIR/flashers/$FLASHER_SH.sh" prepare "$WORK" || exit $?
+    state_replace "phase=ready" "last_result=ok" "detail=升级包已预取并校验" "updated_at=$(iso_now)"
+    emit '{"ok":true,"prepared":true}'
+}
+
+cmd_apply() {
+    _confirm=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --confirm) _confirm="$2"; shift 2 ;;
+            *) die "$EX_USAGE" "未知参数：$1" ;;
+        esac
+    done
+    [ -n "$_confirm" ] || die "$EX_USAGE" "必须用 --confirm <目标版本> 二次确认"
+    config_load
+    _ver=$(state_get version)
+    [ -n "$_ver" ] || die "$EX_STATE" "没有检测结果，先执行 check"
+    [ "$_confirm" = "$_ver" ] || die "$EX_USAGE" "确认版本与检测结果不一致：确认=$_confirm 目标=$_ver"
+    [ "$(state_get phase)" = "ready" ] || die "$EX_STATE" "当前阶段不可升级：$(state_get phase)"
+
+    # 锁由 worker 获取；这里只做「阶段必须 ready」的乐观校验，真正的互斥在设备侧
+    _job=$(date +%s)-$$
+    state_replace "phase=applying" "last_result=none" "code=0" "job_id=$_job" \
+        "version=$_ver" "boot_id_pre=$(boot_id)" "apply_started=$(date +%s)" \
+        "detail=已受理，正在执行" "updated_at=$(iso_now)"
+
+    # 异步执行；不依赖发起它的会话（setsid），否则会话回收会重演"写成功不重启"
+    setsid sh "${FWU_LIBDIR:-/usr/libexec/fwupgrade}/worker.sh" apply "$_job" >/dev/null 2>&1 &
+    printf '{"ok":true,"job_id":"%s","accepted":true}\n' "$_job"
+}
+
+cmd_recover() {
+    _phase=$(state_get phase)
+    case "$_phase" in
+        applying|writing_boot|boot_written)
+            _target=$(state_get version)
+            _now=$(local_version)
+            _bp=$(state_get boot_id_pre | tr -d "-")
+            _st=$(state_get apply_started)
+            _bn=$(boot_id)
+            _el=$(( $(date +%s) - ${_st:-0} ))
+            _line=$(tail -n 1 "$FWU_LAST_FILE" 2>/dev/null)
+            _lts=""; _lver=""
+            if [ -n "$_line" ]; then
+                _lts=$(date -d "$(printf '%s' "$_line" | cut -d' ' -f1-2)" +%s 2>/dev/null)
+                _lver=$(printf '%s' "$_line" | sed -n 's/.*reboot-ok ver=\([^ ]*\).*/\1/p')
+            fi
+            _res=$(recover_decide "$_bp" "$_bn" "$_el" "$_st" "$_lts" "$_lver" "$_target" "$_now")
+            case "$_res" in
+                pending)
+                    log "升级进行中（${_el}s），暂不判定"
+                    return 0
+                    ;;
+                ok)
+                    state_replace "phase=idle" "last_result=ok" "code=0" "mixed_state=N" \
+                        "detail=重启确认：boot_id 已变化，脚本记录 reboot-ok（$_now）" "updated_at=$(iso_now)"
+                    ;;
+                no_reboot)
+                    state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" "mixed_state=H1" \
+                        "detail=写入后 ${_el}s 未重启（boot_id 未变），判定失败，请人工核对" "updated_at=$(iso_now)"
+                    ;;
+                version_mismatch)
+                    state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" "mixed_state=H1" \
+                        "detail=版本不符：目标=$_target 实际=$_now" "updated_at=$(iso_now)"
+                    ;;
+                *)
+                    state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" "mixed_state=H1" \
+                        "detail=已重启但缺少本次成功记录（$_res），请核对 /opt/oc-upgrade.last" "updated_at=$(iso_now)"
+                    ;;
+            esac
+            rm -f "$FWU_LOCK"
+            ;;
+        idle)
+            # 成功收尾后清掉上一次残留的混合态标记，只清 last_result=ok 的情况
+            if [ "$(state_get last_result)" = "ok" ] && [ "$(state_get mixed_state)" != "N" ]; then
+                state_replace "mixed_state=N" "updated_at=$(iso_now)"
+            fi
+            ;;
+        *) : ;;
+    esac
+}
+
+cmd_backups() {
+    _json=""
+    for _entry in $(list_backup_dirs); do
+        _kind=${_entry%%|*}
+        _dir=${_entry#*|}
+        _id=$(basename "$_dir")
+        _size=$(du -sk "$_dir" 2>/dev/null | awk '{print $1}')
+        _created=""
+        _hc=0; _hb=0
+        if [ -f "$_dir/MANIFEST" ]; then
+            _created=$(awk -F= '$1=="created_at"{print $2}' "$_dir/MANIFEST")
+        fi
+        [ -n "$_created" ] || _created=$(printf '%s' "$_id" | sed -n 's/^upgrade-backup-\([0-9]\{8\}\)-\([0-9]\{6\}\)$/\1T\2/p')
+        { [ -f "$_dir/etc-config.tar.gz" ] || [ -d "$_dir/config" ] || [ -f "$_dir/config.tar.gz" ]; } && _hc=1
+        { [ -f "$_dir/boot.tar.gz" ] || [ -f "$_dir/boot-p1.img.gz" ]; } && _hb=1
+        _json="$_json{\"id\":\"$(jesc "$_id")\",\"kind\":\"$_kind\",\"created_at\":\"$(jesc "$_created")\",\"size_kb\":${_size:-0},\"has_config\":$_hc,\"has_boot\":$_hb},"
+    done
+    _json=${_json%,}
+    if [ "${1:-}" = "--json" ]; then
+        printf '{"backups":[%s]}\n' "$_json"
+        return 0
+    fi
+    printf '%-34s %-8s %-18s %-8s %s\n' "ID" "来源" "时间" "大小KB" "内容"
+    printf '%s\n' "$(printf '%.0s-' $(seq 1 80))"
+    for _entry in $(list_backup_dirs); do
+        _kind=${_entry%%|*}; _dir=${_entry#*|}; _id=$(basename "$_dir")
+        _size=$(du -sk "$_dir" 2>/dev/null | awk '{print $1}')
+        _what=""
+        { [ -f "$_dir/etc-config.tar.gz" ] || [ -d "$_dir/config" ]; } && _what="config"
+        { [ -f "$_dir/boot.tar.gz" ] || [ -f "$_dir/boot-p1.img.gz" ]; } && _what="$_what+boot"
+        printf '%-34s %-8s %-18s %-8s %s\n' "$_id" "$_kind" "$(awk -F= '$1=="created_at"{print $2}' "$_dir/MANIFEST" 2>/dev/null)" "${_size:-0}" "${_what:-unknown}"
+    done
+}
+
+list_backup_dirs() {
+    for _d in "$FWU_BACKUP_ROOT"/*; do
+        [ -d "$_d" ] && printf 'ours|%s\n' "$_d"
+    done
+    for _d in /opt/upgrade-backup-*; do
+        [ -d "$_d" ] && printf 'script|%s\n' "$_d"
+    done
+}
+
+# 把某个备份里的 config 解到临时目录，回显目录路径
+materialize_backup_config() {
+    _dir="$1"; _work="$2"
+    if [ -d "$_dir/config" ]; then
+        printf '%s' "$_dir/config"
+        return 0
+    fi
+    mkdir -p "$_work" || return 1
+    if [ -f "$_dir/etc-config.tar.gz" ]; then
+        tar -xzf "$_dir/etc-config.tar.gz" -C "$_work" 2>/dev/null || return 1
+        [ -d "$_work/config" ] && { printf '%s' "$_work/config"; return 0; }
+    fi
+    if [ -f "$_dir/config.tar.gz" ]; then
+        tar -xzf "$_dir/config.tar.gz" -C "$_work" 2>/dev/null || return 1
+        [ -d "$_work/config" ] && { printf '%s' "$_work/config"; return 0; }
+    fi
+    return 1
+}
+
+cmd_rollback() {
+    _confirm=""; _replace=0; _dry=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --confirm) _confirm="$2"; shift 2 ;;
+            --replace) _replace=1; shift ;;
+            --dry-run) _dry=1; shift ;;
+            *) die "$EX_USAGE" "未知参数：$1" ;;
+        esac
+    done
+    [ -n "$_confirm" ] || die "$EX_USAGE" "必须用 --confirm <备份ID> 二次确认"
+    valid_backup_id "$_confirm" || die "$EX_USAGE" "备份 ID 非法"
+
+    case "$(state_get phase)" in
+        applying|writing_boot|boot_written) die "$EX_STATE" "升级进行中，拒绝回滚" ;;
+    esac
+
+    _dir=""
+    for _entry in $(list_backup_dirs); do
+        _d=${_entry#*|}
+        [ "$(basename "$_d")" = "$_confirm" ] && { _dir="$_d"; break; }
+    done
+    [ -n "$_dir" ] || die "$EX_USAGE" "找不到备份：$_confirm"
+
+    _ts=$(date +%Y%m%d-%H%M%S)
+    _src=$(materialize_backup_config "$_dir" "$FWU_ROOT/rollback/work-$_ts") ||
+        die "$EX_VERIFY" "该备份里没有可用的配置"
+
+    # 统计差异（只读）
+    _changed=0; _total=0; _missing=0; _names=""
+    for _f in "$_src"/*; do
+        [ -f "$_f" ] || continue
+        _total=$((_total + 1))
+        _base=$(basename "$_f")
+        _hit=0
+        if [ ! -f "$FWU_ETC_CONFIG/$_base" ]; then
+            _missing=$((_missing + 1)); _changed=$((_changed + 1)); _hit=1
+        elif ! cmp -s "$_f" "$FWU_ETC_CONFIG/$_base"; then
+            _changed=$((_changed + 1)); _hit=1
+        fi
+        [ "$_hit" = "1" ] && _names="$_names\"$(jesc "$_base")\","
+    done
+    _names=${_names%,}
+
+    if [ "$_dry" = "1" ]; then
+        printf '{"ok":true,"dry_run":true,"backup":"%s","files":%d,"changed":%d,"missing":%d,"changed_files":[%s]}\n' \
+            "$(jesc "$_confirm")" "$_total" "$_changed" "$_missing" "$_names"
+        return 0
+    fi
+
+    # 安全网：先给当前配置留一份，再动
+    backup_config "$FWU_ROOT/rollback/$_ts-pre" || die "$EX_STATE" "回滚前快照失败，已中止"
+
+    if [ "$_replace" = "1" ]; then
+        _old="$FWU_ETC_CONFIG.pre-$_ts"
+        mv "$FWU_ETC_CONFIG" "$_old" || die "$EX_STATE" "无法移开现有配置"
+        mkdir -p "$FWU_ETC_CONFIG" || { mv "$_old" "$FWU_ETC_CONFIG"; die "$EX_STATE" "无法创建配置目录"; }
+        cp -a "$_src/." "$FWU_ETC_CONFIG/" || {
+            rm -rf "$FWU_ETC_CONFIG"; mv "$_old" "$FWU_ETC_CONFIG"
+            die "$EX_STATE" "恢复失败，已还原原配置"
+        }
+    else
+        cp -a "$_src/." "$FWU_ETC_CONFIG/" || die "$EX_STATE" "合并恢复失败（已保留回滚前快照）"
+    fi
+
+    # 校验：逐个文件比对，不一致即报
+    _bad=0
+    for _f in "$_src"/*; do
+        [ -f "$_f" ] || continue
+        cmp -s "$_f" "$FWU_ETC_CONFIG/$(basename "$_f")" || _bad=$((_bad + 1))
+    done
+    if [ "$_bad" -gt 0 ]; then
+        state_replace "last_result=failed" "code=$EX_VERIFY" \
+            "detail=配置回滚后有 $_bad 个文件与备份不一致，请核对" "updated_at=$(iso_now)"
+        die "$EX_VERIFY" "校验失败：$_bad 个文件不一致"
+    fi
+
+    state_replace "last_result=ok" "code=0" "detail=配置已从 $_confirm 恢复（模式=$([ "$_replace" = 1 ] && echo replace || echo merge)，$((_total - _missing)) 个覆盖、$_missing 个补回），重启或 reload 后生效" "updated_at=$(iso_now)"
+    printf '{"ok":true,"backup":"%s","mode":"%s","files":%d,"changed":%d,"missing":%d,"pre_snapshot":"%s"}\n' \
+        "$(jesc "$_confirm")" "$([ "$_replace" = 1 ] && echo replace || echo merge)" \
+        "$_total" "$_changed" "$_missing" "$(jesc "$FWU_ROOT/rollback/$_ts-pre")"
+}
+
+cmd_diag() {
+    _ts=$(date +%Y%m%d-%H%M%S)
+    _dir="$FWU_ROOT/diag"
+    _w="$_dir/work-$_ts"
+    mkdir -p "$_w" || die "$EX_STATE" "无法创建诊断目录"
+    _out="$_dir/fwupgrade-diag-$_ts.tar.gz"
+
+    {
+        printf 'collected_at=%s\n' "$(iso_now)"
+        printf 'hostname=%s\n' "$(cat /proc/sys/kernel/hostname 2>/dev/null)"
+        printf 'oc_version=%s\n' "$(local_version)"
+        printf 'uptime=%s\n' "$(uptime 2>/dev/null | tr -s ' ')"
+        printf 'boot_id=%s\n' "$(boot_id)"
+        printf 'phase=%s last_result=%s mixed=%s\n' "$(state_get phase)" "$(state_get last_result)" "$(state_get mixed_state)"
+        printf 'script_sha=%s\n' "$(sha256sum /usr/lib/oc-upgrade.sh 2>/dev/null | awk '{print $1}')"
+        printf 'wrapper_sha=%s\n' "$(sha256sum /usr/bin/upgrade 2>/dev/null | awk '{print $1}')"
+        printf 'os_release=%s\n' "$(tr '\n' ' ' </etc/openwrt_release 2>/dev/null)"
+        printf '\n[df]\n'
+        df -k / /opt /tmp 2>/dev/null
+        printf '\n[free]\n'
+        free 2>/dev/null
+    } >"$_w/meta.txt" 2>&1
+
+    cat "$FWU_STATE_JSON" >"$_w/state.json" 2>/dev/null
+    "$0" config >"$_w/config.json" 2>/dev/null
+    "$0" backups --json >"$_w/backups.json" 2>/dev/null
+    tail -n 200 "$FWU_JOURNAL" 2>/dev/null |
+        sed -e 's/\(token\|Authorization\)=[^& ]*/\1=***/g' >"$_w/journal-tail.txt"
+    ps 2>/dev/null | grep -E 'fwupgrade|upgrade' >"$_w/processes.txt" 2>/dev/null
+
+    tar -czf "$_out" -C "$_w" . 2>/dev/null || { rm -rf "$_w"; die "$EX_STATE" "打包诊断信息失败"; }
+    rm -rf "$_w"
+    _kb=$(du -sk "$_out" 2>/dev/null | awk '{print $1}')
+    log "诊断包已生成：$_out（${_kb}KB）"
+    printf '{"ok":true,"path":"%s","size_kb":%s,"entries":["meta.txt","state.json","config.json","backups.json","journal-tail.txt","processes.txt"]}\n' \
+        "$(jesc "$_out")" "${_kb:-0}"
+}
+
+cmd_clean() {
+    _n=0
+    for _f in "$FWU_ROOT/cache/rootfs.tar.gz" "$FWU_ROOT/cache/boot.tar.gz"; do
+        [ -f "$_f" ] && { rm -f "$_f"; _n=$((_n + 1)); }
+    done
+    for _f in "$FWU_ROOT"/diag/*.tar.gz; do
+        [ -f "$_f" ] && { rm -f "$_f"; _n=$((_n + 1)); }
+    done
+    for _d in "$FWU_ROOT"/rollback/work-*; do
+        [ -d "$_d" ] && { rm -rf "$_d"; _n=$((_n + 1)); }
+    done
+    : >"$FWU_JOURNAL" 2>/dev/null
+    emit "{\"ok\":true,\"removed\":$_n}"
+}
+
+cmd_config() {
+    config_load
+    printf '{"provider":"%s","repo":"%s","base_url":"%s","asset_rootfs":"%s","asset_boot":"%s","channel":"%s","dry_run":"%s","force":"%s","mirror":"%s","token":"%s"}\n' \
+        "$(jesc "$C_PROVIDER")" "$(jesc "$C_REPO")" "$(jesc "$C_BASE")" \
+        "$(jesc "$C_ASSET_ROOTFS")" "$(jesc "$C_ASSET_BOOT")" "$(jesc "$C_CHANNEL")" \
+        "${C_DRY_RUN:-1}" "${C_FORCE:-0}" "$(jesc "$C_MIRROR")" "$([ -n "$C_TOKEN_FILE" ] && echo configured || echo none)"
+}
+
+# flasher 名从清单读，缺省 onecloud
+resolve_flasher() {
+    FLASHER_SH=$(mget FLASHER_TYPE)
+    [ -n "$FLASHER_SH" ] || FLASHER_SH="onecloud"
+    case "$FLASHER_SH" in
+        onecloud-emmc|onecloud) FLASHER_SH="onecloud" ;;
+        dryrun) : ;;
+        *) die "$EX_NOIMPL" "未安装的 flasher：$FLASHER_SH" ;;
+    esac
+}
+
+case "${1:-}" in
+    status) shift; cmd_status "$@" ;;
+    check) cmd_check ;;
+    download) cmd_download ;;
+    apply) shift; cmd_apply "$@" ;;
+    backups) shift; cmd_backups "$@" ;;
+    diag) cmd_diag ;;
+    rollback) shift; cmd_rollback "$@" ;;
+    recover) cmd_recover ;;
+    clean) cmd_clean ;;
+    config) cmd_config ;;
+    -h|--help|help) usage ;;
+    *) usage; exit "$EX_USAGE" ;;
+esac

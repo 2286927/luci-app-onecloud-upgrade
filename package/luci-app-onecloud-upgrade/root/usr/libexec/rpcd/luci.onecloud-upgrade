@@ -1,0 +1,96 @@
+#!/bin/sh
+# rpcd 对象：luci.onecloud-upgrade
+# 原则：所有方法秒回；长任务只下发 job_id，绝不在这里等 197s 的写入。
+. "${FWU_LIBDIR:-/usr/libexec/fwupgrade}/lib.sh"
+
+CTL=/usr/libexec/fwupgrade/fwupgradectl
+
+list_methods() {
+    cat <<'EOF'
+{"status":{},"check":{},"apply":{"confirm":"string"},"config_get":{},"config_set":{"provider":"string","repo":"string","base_url":"string","asset_rootfs":"string","asset_boot":"string","channel":"string","dry_run":"string"},"log_tail":{"lines":"integer"},"backups":{},"diag":{},"rollback":{"id":"string","mode":"string"}}
+EOF
+}
+
+# rpcd 调用约定（实测）：枚举用 `list`，执行用 `call <method>`，参数走 stdin JSON
+_METHOD="${1:-}"
+case "$_METHOD" in
+    ""|list)
+        list_methods
+        exit 0
+        ;;
+    call)
+        _METHOD="${2:-}"
+        ;;
+esac
+
+case "$_METHOD" in
+    status)
+        "$CTL" status --json 2>/dev/null || printf '{"ok":false,"error":"state_unavailable"}\n'
+        ;;
+    check)
+        # 异步：立刻返回，前端轮询 status
+        setsid "$CTL" check >/dev/null 2>&1 &
+        printf '{"ok":true,"accepted":true}\n'
+        ;;
+    apply)
+        _params=$(cat)
+        _confirm=$(printf '%s' "$_params" | jsonfilter -e '@.confirm' 2>/dev/null)
+        [ -n "$_confirm" ] || { printf '{"ok":false,"error":"confirm_required"}\n'; exit 0; }
+        "$CTL" apply --confirm "$_confirm" 2>/dev/null ||
+            printf '{"ok":false,"error":"apply_rejected"}\n'
+        ;;
+    config_get)
+        "$CTL" config 2>/dev/null || printf '{"ok":false}\n'
+        ;;
+    config_set)
+        _params=$(cat)
+        for _k in provider repo base_url asset_rootfs asset_boot channel; do
+            _v=$(printf '%s' "$_params" | jsonfilter -e "@.$_k" 2>/dev/null)
+            [ -n "$_v" ] || continue
+            case "$_k" in
+                provider)
+                    case "$_v" in github-release|static-https|local-file) : ;; *) _v="" ;; esac
+                    ;;
+                channel)
+                    case "$_v" in stable|beta|dev) : ;; *) _v="" ;; esac
+                    ;;
+            esac
+            [ -n "$_v" ] || continue
+            uci -q set "onecloud-upgrade.main.$_k=$_v" || true
+        done
+        uci -q commit onecloud-upgrade
+        printf '{"ok":true}\n'
+        ;;
+    diag)
+        "$CTL" diag 2>/dev/null || printf '{"ok":false,"error":"diag_failed"}\n'
+        ;;
+    backups)
+        "$CTL" backups --json 2>/dev/null || printf '{"backups":[]}\n'
+        ;;
+    rollback)
+        _params=$(cat)
+        _id=$(printf '%s' "$_params" | jsonfilter -e '@.id' 2>/dev/null)
+        _mode=$(printf '%s' "$_params" | jsonfilter -e '@.mode' 2>/dev/null)
+        [ -n "$_id" ] || { printf '{"ok":false,"error":"id_required"}\n'; exit 0; }
+        if [ "$_mode" = "replace" ]; then
+            "$CTL" rollback --confirm "$_id" --replace 2>/dev/null ||
+                printf '{"ok":false,"error":"rollback_failed"}\n'
+        else
+            "$CTL" rollback --confirm "$_id" 2>/dev/null ||
+                printf '{"ok":false,"error":"rollback_failed"}\n'
+        fi
+        ;;
+    log_tail)
+        _params=$(cat)
+        _n=$(printf '%s' "$_params" | jsonfilter -e '@.lines' 2>/dev/null)
+        case "$_n" in ''|*[!0-9]*) _n=50 ;; esac
+        [ "$_n" -gt 200 ] && _n=200
+        _body=$(tail -n "$_n" "$FWU_JOURNAL" 2>/dev/null |
+            sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\r//g' |
+            awk '{printf "%s\\n", $0}')
+        printf '{"lines":"%s"}\n' "$_body"
+        ;;
+    *)
+        printf '{"ok":false,"error":"unknown_method"}\n'
+        ;;
+esac

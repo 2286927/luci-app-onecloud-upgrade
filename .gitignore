@@ -1,0 +1,13 @@
+# 运行期与取证产物，不进仓库
+evidence/
+.ssh-ops/
+*.log
+*.tar.gz
+__pycache__/
+*.pyc
+
+# 编辑器/系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

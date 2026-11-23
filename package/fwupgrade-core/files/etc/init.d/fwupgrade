@@ -1,0 +1,12 @@
+#!/bin/sh /etc/rc.common
+# 开机自检：判定上次升级是「完成」「未重启」还是「混合态」。
+# 不做自动重试——升级是单向门，自动重来只会把混合态加深。
+
+START=95
+STOP=10
+
+start() {
+    /usr/libexec/fwupgrade/fwupgradectl recover >/dev/null 2>&1
+}
+
+stop() { :; }

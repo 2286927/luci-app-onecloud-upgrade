@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "channel": "stable",
+  "generated_at": "2026-11-23T12:00:00Z",
+  "release": { "version": "26.11.20_04.18.00", "build_ts": 1795300000 },
+  "targets": [
+    { "target": "amlogic/meson8b", "boards": ["onecloud"], "compatible": ["thunder,onecloud"] }
+  ],
+  "assets": [
+    { "kind": "rootfs", "url": "./rootfs.tar.gz", "size": 165721125, "sha256": "9f2c000000000000000000000000000000000000000000000000000000000001" },
+    { "kind": "boot", "url": "./boot.tar.gz", "size": 5572520, "sha256": "4a71000000000000000000000000000000000000000000000000000000000002" }
+  ],
+  "flasher": { "type": "dryrun", "abi": 1, "keep_paths": ["/etc/config", "/opt"], "rollback": "none" }
+}

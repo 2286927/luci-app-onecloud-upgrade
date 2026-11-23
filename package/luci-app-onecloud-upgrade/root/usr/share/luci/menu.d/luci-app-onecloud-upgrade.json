@@ -1,0 +1,13 @@
+{
+	"admin/system/onecloud-upgrade": {
+		"title": "OneCloud 升级",
+		"order": 60,
+		"action": {
+			"type": "view",
+			"path": "onecloud_upgrade/overview"
+		},
+		"depends": {
+			"acl": [ "luci-app-onecloud-upgrade" ]
+		}
+	}
+}

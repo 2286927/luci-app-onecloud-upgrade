@@ -1,0 +1,35 @@
+{
+ "luci-app-onecloud-upgrade": {
+  "description": "OneCloud 固件在线升级（查看与配置）",
+  "read": {
+   "ubus": {
+    "luci.onecloud-upgrade": [
+     "status",
+     "config_get",
+     "log_tail",
+     "backups"
+    ]
+   }
+  },
+  "write": {
+   "ubus": {
+    "luci.onecloud-upgrade": [
+     "check",
+     "config_set",
+     "diag"
+    ]
+   }
+  }
+ },
+ "luci-app-onecloud-upgrade-apply": {
+  "description": "OneCloud 固件升级：执行写入（高风险，单独授权）",
+  "write": {
+   "ubus": {
+    "luci.onecloud-upgrade": [
+     "apply",
+     "rollback"
+    ]
+   }
+  }
+ }
+}
