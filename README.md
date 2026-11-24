@@ -52,7 +52,7 @@ make package/luci-app-onecloud-upgrade/compile V=s
 
 ## 下载
 
-预发布产物：<https://github.com/2286927/luci-app-onecloud-upgrade/releases/tag/v0.1.0-rc3>（5 个 apk，`noarch`）。
+预发布产物：<https://github.com/2286927/luci-app-onecloud-upgrade/releases/tag/v0.1.0-rc4>（5 个 apk，`noarch`）。
 打 tag 时 CI 会自动把 apk 附到 Release。
 
 ## Screenshots / 截图
