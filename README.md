@@ -44,6 +44,8 @@ make package/luci-app-onecloud-upgrade/compile V=s
 - [兼容性](docs/兼容性.md)（支持范围与已验证矩阵）
 - [固件接入](docs/固件接入.md)（feed 方式）
 - [签名与密钥](docs/签名与密钥.md)（usign 清单签名、轮换、私钥保管）
+- [v0.1.0 发布说明](docs/发布说明-0.1.0.md)
+- [破坏性测试预案](docs/破坏性测试预案.md)（写 boot 掉电的前置条件与步骤）
 - [发布评估](docs/发布评估-20261123.md)
 
 ## 发布状态
