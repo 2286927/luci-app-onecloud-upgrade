@@ -345,7 +345,7 @@ verify_manifest_sig() {
         return 0
     fi
     command -v usign >/dev/null 2>&1 || die "$EX_VERIFY" "缺少 usign，无法校验清单签名"
-    _key=$(ls /etc/fwupgrade/pubkey.* 2>/dev/null | head -n 1)
+    _key=$(ls /etc/fwupgrade/pubkey.* 2>/dev/null | grep -v '\.bak$' | head -n 1)
     [ -n "$_key" ] || die "$EX_VERIFY" "未找到公钥 /etc/fwupgrade/pubkey.*"
     usign -V -p "$_key" -x "$_sig" -m "$_m" 2>/dev/null ||
         die "$EX_VERIFY" "清单签名校验失败（公钥 $(basename "$_key")）"

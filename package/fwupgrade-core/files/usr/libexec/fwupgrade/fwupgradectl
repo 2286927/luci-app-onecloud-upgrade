@@ -46,6 +46,12 @@ cmd_status() {
 
 cmd_check() {
     config_load
+    # 无 RTC 设备冷启动时间可能回到 1970，TLS 必然失败，先给明确原因
+    _now="${FWU_NOW_OVERRIDE:-$(date +%s)}"
+    case "$_now" in ''|*[!0-9]*) _now=0 ;; esac
+    if [ "$_now" -lt 1704067200 ]; then
+        die "$EX_NET" "设备时间不正确（$(date '+%F %T')），证书校验会失败；请先校时再检测"
+    fi
     mkdir -p "$WORK"
     # 并发 check 会同时写 state/manifest：用文件锁串行（flock 可用时）
     if command -v flock >/dev/null 2>&1; then

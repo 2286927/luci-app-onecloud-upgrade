@@ -16,7 +16,12 @@ provider_resolve() {
         *)        _url="$API_BASE/repos/$C_REPO/releases/latest" ;;
     esac
     log "取 release：$_url"
-    http_fetch "$_url" "$_work/release.json" || die "$EX_DL" "取 release 失败（$C_REPO）"
+    if ! http_fetch "$_url" "$_work/release.json"; then
+        if grep -qi "rate limit" "$_work/release.json" 2>/dev/null; then
+            die "$EX_DL" "GitHub API 限流（匿名 60 次/小时/IP），请稍后重试或为私有源配置 token"
+        fi
+        die "$EX_DL" "取 release 失败（$C_REPO）"
+    fi
 
     ucode "$FWU_LIBDIR/ghrelease.uc" <"$_work/release.json" >"$_work/release.env" 2>/dev/null ||
         die "$EX_VERIFY" "release JSON 解析失败"
