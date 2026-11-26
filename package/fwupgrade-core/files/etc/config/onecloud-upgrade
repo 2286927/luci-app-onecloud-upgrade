@@ -1,7 +1,8 @@
 config onecloud-upgrade 'main'
 	option enabled '1'
 	option provider 'github-release'
-	option repo ''
+	# 默认指向 OneCloud 官方固件仓；换仓库/一仓多机型时在页面上改
+	option repo '2286927/onecloud-25.12-onlineFirmware'
 	option base_url ''
 	option asset_rootfs 'immortalwrt-amlogic-meson8b-thunder-onecloud-rootfs.tar.gz'
 	option asset_boot 'onecloud-boot.tar.gz'

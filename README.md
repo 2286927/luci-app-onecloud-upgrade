@@ -4,7 +4,7 @@
 
 设备固件里没有 `IMAGE/sysupgrade`，标准 OpenWrt 的升级路径在 OneCloud 上不存在。本应用把「固件仓的发布产物」和「设备自带的 `/usr/bin/upgrade`」包成一套可配置、可验证、可回滚的升级流程：**自己不做任何写盘逻辑**，只负责取清单、验签、比对、调度与判定。
 
-只支持 OneCloud + ImmortalWrt 25.12（apk + ucode LuCI），**不承诺跨机型**。这里的"通用"指跨用户、跨固件仓、跨自编译固件——仓库地址、资产名、版本源都在页面上配，不写死。
+只支持 OneCloud + ImmortalWrt 25.12（apk + ucode LuCI），**不承诺跨机型**。这里的"通用"指跨用户、跨固件仓、跨自编译固件——仓库地址、资产名、版本源都在页面上配，不写死。默认填的是 OneCloud 官方固件仓（`2286927/onecloud-25.12-onlineFirmware`），`tag` 留空走 latest。
 
 ## 能做什么
 
