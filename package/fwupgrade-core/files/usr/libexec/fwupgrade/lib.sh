@@ -363,6 +363,20 @@ ver_gt() {
     awk -v a="$1" -v b="$2" 'BEGIN{ if (a=="" || b=="") exit 1; exit !(a>b) }'
 }
 
+# 本应用是否仍在 apk 管理内。
+# 在线升级会用新镜像自带的 /lib/apk/db/installed 整包覆盖旧库，若镜像未打包本应用，
+# 文件会残留（tar -x 不删「新镜像没有」的文件）但注册丢失——此时 apk del/upgrade 都不再管它。
+# 输出：yes / no / unknown（读不到数据库）
+pkg_registered() {
+    _db="${FWU_PKG_DB:-/lib/apk/db/installed}"
+    [ -f "$_db" ] || { printf 'unknown'; return 0; }
+    if grep -q '^P:luci-app-onecloud-upgrade$' "$_db" 2>/dev/null; then
+        printf 'yes'
+    else
+        printf 'no'
+    fi
+}
+
 # 清单版本 -> 本机同格式；兼容 "OneCloud_openwrt-25.12_26.11.18_16.27.30" 这类 tag
 norm_version() {
     _nv=$(printf '%s' "$1" | sed -n 's/^\([0-9][0-9]\)\.\([0-9][0-9]\)\.\([0-9][0-9]\)[_-]\([0-9][0-9]\)\.\([0-9][0-9]\)\.\([0-9][0-9]\)$/\1.\2.\3_\4.\5.\6/p')

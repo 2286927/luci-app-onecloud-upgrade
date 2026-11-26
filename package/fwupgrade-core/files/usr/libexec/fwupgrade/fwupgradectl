@@ -40,6 +40,11 @@ cmd_status() {
     printf '本机版本  : %s\n' "$(local_version)"
     printf '目标版本  : %s\n' "$(state_get version)"
     printf '目标平台  : %s\n' "$(state_get target)"
+    case "$(pkg_registered)" in
+        no) printf '包管理    : 未注册（文件在位但 apk 无记录；在线升级冲掉了注册，需重装，见 docs/固件接入.md）\n' ;;
+        yes) printf '包管理    : 已注册\n' ;;
+        *) printf '包管理    : 无法确认（读不到 apk 数据库）\n' ;;
+    esac
     printf '最近更新  : %s\n' "$(state_get updated_at)"
     printf '说明      : %s\n' "$(state_get detail)"
 }

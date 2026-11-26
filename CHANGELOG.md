@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## Unreleased
+
+- `status` 新增「包管理」一行：`pkg_registered()` 读 `/lib/apk/db/installed`，区分「已注册 / 未注册（文件在位但 apk 无记录）/ 无法确认」。在线升级会用新镜像的数据库整包覆盖，若镜像未打包本应用，文件残留但注册丢失——重装需 `--force-overwrite`（细节见 `docs/固件接入.md`）。
+- 单测 57 → 60 条。
+
 ## v0.1.0 (2026-11-26)
 
 首个正式版本。仅支持 OneCloud（ImmortalWrt 25.12-SNAPSHOT / apk / ucode LuCI），不承诺跨机型。

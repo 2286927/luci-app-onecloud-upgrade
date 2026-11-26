@@ -134,6 +134,14 @@ _n=$(ls -d "$CUR4".pre-* 2>/dev/null | wc -l)
 ls -d "$CUR4".pre-2026112* >/dev/null 2>&1 && ok "保留的是最新（时间戳最大）那份" || bad "最新快照被误删"
 [ -d "$CUR4.new-20260103-000000" ] && bad ".new 残骸未清理" || ok ".new 残骸已清理"
 
+echo "== 包注册自检 =="
+DB1="./apkdb-yes"; DB2="./apkdb-no"
+printf 'P:busybox\nV:1.0\nP:luci-app-onecloud-upgrade\nV:0.1.0-r1\n' >"$DB1"
+printf 'P:busybox\nV:1.0\n' >"$DB2"
+eq "有记录 → yes" "$(FWU_PKG_DB="$DB1" sh -c '. "$1"; pkg_registered' _ "$LIB")" "yes"
+eq "无记录 → no" "$(FWU_PKG_DB="$DB2" sh -c '. "$1"; pkg_registered' _ "$LIB")" "no"
+eq "库不存在 → unknown" "$(FWU_PKG_DB=./nope.db sh -c '. "$1"; pkg_registered' _ "$LIB")" "unknown"
+
 echo "== 升级结局判定 =="
 eq "重启+记录+版本一致 → ok" "$(recover_decide A B 30 1000 1100 '26.11.20_04.18.00' '26.11.20_04.18.00' '26.11.20_04.18.00')" "ok"
 eq "未重启且未超时 → pending" "$(recover_decide A A 100 1000 '' '' 'v' 'v')" "pending"
