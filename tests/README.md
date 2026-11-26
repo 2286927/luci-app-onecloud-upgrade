@@ -26,3 +26,4 @@
 - **回滚中途掉电**：依赖 L2 快照能力（未实现）。
 | `ui_render_test.js` | 视图渲染冒烟：进度文本（空闲 `—` / 写入百分比）、`log_tail` 内容、空日志提示；用桩件跑真实 overview.js | 工作站 `node tests/ui_render_test.js` |
 | `device_config_set.sh` | `config_set` 空值语义：清空生效、未传字段不改写、非法枚举被拒（自动恢复原配置） | 设备上 `sh` |
+| `device_ui_actions_test.sh` | 按页面按钮实际调用的 RPC 做功能验收：保存/检测/升级(演练)/诊断/恢复/删除/日志 | 设备上 `sh`（自动恢复配置） |

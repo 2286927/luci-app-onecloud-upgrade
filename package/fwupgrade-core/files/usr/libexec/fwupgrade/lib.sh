@@ -69,15 +69,34 @@ free_kb() {
     df -k "$1" 2>/dev/null | awk 'END{print $4}'
 }
 
-# 单次取件（不重试），用于镜像回退时快速切换
+# run_timeout <秒> <命令...>：本机 busybox 没有 timeout，用后台 + 轮询 + kill 兜底。
+# uclient-fetch 的 -T 只是空闲超时，遇到"细水长流"的连接会一直挂着，
+# 表现就是检测卡在 checking 状态好几分钟（2026-11-26 实测）。
+run_timeout() {
+    _rt_secs="$1"; shift
+    "$@" &
+    _rt_pid=$!
+    _rt_i=0
+    while [ "$_rt_i" -lt "$_rt_secs" ]; do
+        kill -0 "$_rt_pid" 2>/dev/null || { wait "$_rt_pid"; return $?; }
+        sleep 1; _rt_i=$((_rt_i + 1))
+    done
+    kill -TERM "$_rt_pid" 2>/dev/null
+    sleep 1
+    kill -KILL "$_rt_pid" 2>/dev/null
+    wait "$_rt_pid" 2>/dev/null
+    return 124
+}
+
+# 单次取件（不重试），用于镜像回退时快速切换；整体硬上限 40s
 http_fetch_once() {
     _url="$1"; _out="$2"
     if command -v uclient-fetch >/dev/null 2>&1; then
-        uclient-fetch -q -T 25 -O "$_out" "$_url" 2>/dev/null && return 0
+        run_timeout 40 uclient-fetch -q -T 25 -O "$_out" "$_url" 2>/dev/null && return 0
     elif command -v curl >/dev/null 2>&1; then
-        curl -fsSL --max-time 25 -o "$_out" "$_url" 2>/dev/null && return 0
+        run_timeout 40 curl -fsSL --max-time 25 -o "$_out" "$_url" 2>/dev/null && return 0
     elif command -v wget >/dev/null 2>&1; then
-        wget -q -T 25 -O "$_out" "$_url" 2>/dev/null && return 0
+        run_timeout 40 wget -q -T 25 -O "$_out" "$_url" 2>/dev/null && return 0
     fi
     return 1
 }

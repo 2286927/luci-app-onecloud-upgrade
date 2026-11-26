@@ -229,7 +229,10 @@ return view.extend({
 				E('td', { 'class': 'td' }, b.id),
 				E('td', { 'class': 'td' }, b.created_at || '—'),
 				E('td', { 'class': 'td' }, String(b.size_kb || 0) + ' KB'),
-				E('td', { 'class': 'td' }, b.kind === 'ours' ? '本应用' : '现网脚本'),
+				E('td', { 'class': 'td' }, [
+					b.kind === 'ours' ? '本应用' : '现网脚本',
+					b.newest ? E('span', { 'style': 'margin-left:6px;color:#c33' }, '（最新·受保护）') : ''
+				]),
 				E('td', { 'class': 'td' }, [
 					E('button', {
 						'class': 'btn cbi-button cbi-button-action',

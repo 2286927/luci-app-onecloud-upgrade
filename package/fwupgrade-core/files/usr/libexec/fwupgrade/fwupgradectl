@@ -28,7 +28,7 @@ emit() { printf '%s\n' "$1"; }
 
 cmd_status() {
     case "$(state_get phase)" in
-        applying|writing_boot|boot_written|rollback) cmd_recover >/dev/null 2>&1 ;;
+        applying|writing_boot|boot_written|rollback|checking) cmd_recover >/dev/null 2>&1 ;;
     esac
     if [ "${1:-}" = "--json" ] && [ -s "$FWU_STATE_JSON" ]; then
         cat "$FWU_STATE_JSON"
@@ -307,6 +307,20 @@ cmd_recover() {
             esac
             rm -f "$FWU_LOCK"
             ;;
+        checking)
+            # 检测卡住（网络细水长流 / DNS 挂起）：超时即判失败，避免界面永远停在「检测中」
+            _upd=$(state_get updated_at)
+            _uts=$(date -d "$_upd" +%s 2>/dev/null)
+            case "$_uts" in ''|*[!0-9]*) _uts=0 ;; esac
+            _el=$(( $(date +%s) - _uts ))
+            if [ "$_uts" -gt 0 ] && [ "$_el" -gt 240 ]; then
+                state_replace "phase=idle" "last_result=failed" "code=$EX_NET" \
+                    "detail=检测 ${_el}s 未完成（网络卡住或 DNS 失败），已判定失败，请重试" \
+                    "updated_at=$(iso_now)"
+            else
+                log "检测进行中（${_el}s），暂不判定"
+            fi
+            ;;
         rollback)
             # 回滚中途被杀/掉电：不猜结果。配置目录还在就报「可能部分生效」，不在就报「缺失」
             _rb=$(state_get rollback_backup)
@@ -332,6 +346,9 @@ cmd_recover() {
 
 cmd_backups() {
     _json=""
+    # 「最新一份」的判定与 forget 保持一致：按 mtime，跨 both 两类备份
+    _newest=$(ls -dt $(list_backup_dirs | awk -F'|' '{print $2}') 2>/dev/null | head -n 1)
+    _newest_real=$(readlink -f "$_newest" 2>/dev/null)
     for _entry in $(list_backup_dirs); do
         _kind=${_entry%%|*}
         _dir=${_entry#*|}
@@ -345,7 +362,9 @@ cmd_backups() {
         [ -n "$_created" ] || _created=$(printf '%s' "$_id" | sed -n 's/^upgrade-backup-\([0-9]\{8\}\)-\([0-9]\{6\}\)$/\1T\2/p')
         { [ -f "$_dir/etc-config.tar.gz" ] || [ -d "$_dir/config" ] || [ -f "$_dir/config.tar.gz" ]; } && _hc=1
         { [ -f "$_dir/boot.tar.gz" ] || [ -f "$_dir/boot-p1.img.gz" ]; } && _hb=1
-        _json="$_json{\"id\":\"$(jesc "$_id")\",\"kind\":\"$_kind\",\"created_at\":\"$(jesc "$_created")\",\"size_kb\":${_size:-0},\"has_config\":$_hc,\"has_boot\":$_hb},"
+        _isnew=0
+        [ "$(readlink -f "$_dir" 2>/dev/null)" = "$_newest_real" ] && _isnew=1
+        _json="$_json{\"id\":\"$(jesc "$_id")\",\"kind\":\"$_kind\",\"created_at\":\"$(jesc "$_created")\",\"size_kb\":${_size:-0},\"has_config\":$_hc,\"has_boot\":$_hb,\"newest\":$_isnew},"
     done
     _json=${_json%,}
     if [ "${1:-}" = "--json" ]; then
