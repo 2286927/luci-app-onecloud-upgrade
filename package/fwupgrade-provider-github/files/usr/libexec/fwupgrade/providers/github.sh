@@ -55,7 +55,15 @@ provider_resolve() {
 
     if [ -n "$_murl" ]; then
         log "使用 release 内的 manifest.json"
-        http_fetch_asset "$_murl" "$_work/manifest.json" || die "$EX_DL" "取 manifest.json 失败"
+        if ! http_fetch_asset "$_murl" "$_work/manifest.json"; then
+            # 常见根因：无 RTC 设备时钟停在构建日期，证书 not yet valid
+            _probe=$(uclient-fetch -O /dev/null -T 8 https://github.com/ 2>&1)
+            case "$_probe" in
+                *certificate*|*"not yet valid"*)
+                    die "$EX_NET" "设备时间不正确（$(date '+%F %T')），证书校验失败；请先校时再检测" ;;
+            esac
+            die "$EX_DL" "取 manifest.json 失败"
+        fi
         if [ -n "$_surl" ]; then
             http_fetch_asset "$_surl" "$_work/manifest.json.sig" || die "$EX_DL" "取 manifest.json.sig 失败"
             log "清单签名已下载"
