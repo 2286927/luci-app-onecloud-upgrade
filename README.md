@@ -66,6 +66,7 @@ apk add --allow-untrusted --force-overwrite --repositories-file /dev/null /tmp/*
 | 文档 | 内容 |
 |---|---|
 | [安装与卸载](docs/安装与卸载.md) | apk 安装、首次使用、备份/回滚语义、`diag` 内容、卸载 |
+| [发布结构与工作流](docs/发布结构与工作流.md) | **固件仓要发成什么样**：两种 Release 结构、资产命名、tag 规则、Actions 配置与常见拒绝原因 |
 | [固件接入](docs/固件接入.md) | feed 方式打进镜像；**升级后 apk 注册会丢**的场景与恢复 |
 | [兼容性](docs/兼容性.md) | 支持范围、运行依赖、已验证矩阵、已知限制 |
 | [救援指引](docs/救援指引.md) | 失败判定、boot 破坏现场特征、线刷与 U-Boot 提示符两条恢复路径 |
