@@ -140,4 +140,4 @@ It is **not** a generic sysupgrade frontend. All 5 packages are `PKGARCH=all` (s
 - 能不能这么用：[许可与商业使用](docs/许可与商业使用.md)（含常见情形对照表）
 - 商业授权：通过 Issues 联系；**版权人本人不受限制，可自行商业化**
 
-> v0.1.6 及更早版本曾以 Apache-2.0 发布，已获授权者不受本次变更影响。
+> v0.1.6 及更早版本曾以 Apache-2.0 发布，**现已在仓库下架**（Release 转草稿、tag 已删），当前只公开 v0.1.7。已获授权者对旧版本的权利不受影响，详见 [许可与商业使用](docs/许可与商业使用.md)。
