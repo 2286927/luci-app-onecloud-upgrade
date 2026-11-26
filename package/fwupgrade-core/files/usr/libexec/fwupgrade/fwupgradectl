@@ -28,7 +28,7 @@ emit() { printf '%s\n' "$1"; }
 
 cmd_status() {
     case "$(state_get phase)" in
-        applying|writing_boot|boot_written) cmd_recover >/dev/null 2>&1 ;;
+        applying|writing_boot|boot_written|rollback) cmd_recover >/dev/null 2>&1 ;;
     esac
     if [ "${1:-}" = "--json" ] && [ -s "$FWU_STATE_JSON" ]; then
         cat "$FWU_STATE_JSON"
@@ -300,6 +300,19 @@ cmd_recover() {
             esac
             rm -f "$FWU_LOCK"
             ;;
+        rollback)
+            # 回滚中途被杀/掉电：不猜结果。配置目录还在就报「可能部分生效」，不在就报「缺失」
+            _rb=$(state_get rollback_backup)
+            _n=0
+            [ -d "$FWU_ETC_CONFIG" ] && _n=$(ls -1 "$FWU_ETC_CONFIG" 2>/dev/null | wc -l)
+            if [ "${_n:-0}" -gt 0 ]; then
+                state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" "mixed_state=C1" \
+                    "detail=上次配置回滚未完成（备份=${_rb:-未知}），当前配置可能部分生效；请重新执行同一备份的 rollback（幂等），或先核对再重启" "updated_at=$(iso_now)"
+            else
+                state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" "mixed_state=C1" \
+                    "detail=配置目录 $FWU_ETC_CONFIG 缺失或为空（回滚中断）；请用串口从 $FWU_ROOT/rollback/ 的 -pre 快照或备份还原" "updated_at=$(iso_now)"
+            fi
+            ;;
         idle)
             # 成功收尾后清掉上一次残留的混合态标记，只清 last_result=ok 的情况
             if [ "$(state_get last_result)" = "ok" ] && [ "$(state_get mixed_state)" != "N" ]; then
@@ -425,16 +438,55 @@ cmd_rollback() {
     # 安全网：先给当前配置留一份，再动
     backup_config "$FWU_ROOT/rollback/$_ts-pre" || die "$EX_STATE" "回滚前快照失败，已中止"
 
+    # 写回滚意图标记：中途被杀/掉电后，status/recover 能识别「回滚未完成」，
+    # 而不是把半截结果当成上一次的 ok（phase=rollback 由 cmd_recover 收口）
+    state_replace "phase=rollback" "last_result=none" "code=0" "mixed_state=N" \
+        "rollback_backup=$_confirm" "rollback_started=$(iso_now)" \
+        "detail=正在回滚配置（$_confirm）" "updated_at=$(iso_now)"
+
     if [ "$_replace" = "1" ]; then
+        # 两阶段：先在旁路目录建好并校验，再切换；掉电最多停在「旧目录还在」或「新目录已就位」
         _old="$FWU_ETC_CONFIG.pre-$_ts"
-        mv "$FWU_ETC_CONFIG" "$_old" || die "$EX_STATE" "无法移开现有配置"
-        mkdir -p "$FWU_ETC_CONFIG" || { mv "$_old" "$FWU_ETC_CONFIG"; die "$EX_STATE" "无法创建配置目录"; }
-        cp -a "$_src/." "$FWU_ETC_CONFIG/" || {
-            rm -rf "$FWU_ETC_CONFIG"; mv "$_old" "$FWU_ETC_CONFIG"
+        _new="$FWU_ETC_CONFIG.new-$_ts"
+        # 清掉上次被强杀留下的旁路目录（.pre-* 是快照，不动）
+        for _stale in "$FWU_ETC_CONFIG".new-*; do
+            [ -d "$_stale" ] && rm -rf "$_stale"
+        done
+        rm -rf "$_new"
+        mkdir -p "$_new" || die "$EX_STATE" "无法创建临时配置目录"
+        cp -a "$_src/." "$_new/" || { rm -rf "$_new"; die "$EX_STATE" "恢复失败，原配置未动"; }
+        _nbad=0
+        for _f in "$_src"/*; do
+            [ -f "$_f" ] || continue
+            cmp -s "$_f" "$_new/$(basename "$_f")" || _nbad=$((_nbad + 1))
+        done
+        if [ "$_nbad" -gt 0 ]; then
+            rm -rf "$_new"
+            state_replace "phase=idle" "last_result=failed" "code=$EX_VERIFY" \
+                "detail=回滚副本校验失败（$_nbad 个文件不一致），原配置未动" "updated_at=$(iso_now)"
+            die "$EX_VERIFY" "回滚副本校验失败，原配置未动"
+        fi
+        mv "$FWU_ETC_CONFIG" "$_old" || { rm -rf "$_new"; die "$EX_STATE" "无法移开现有配置"; }
+        if ! mv "$_new" "$FWU_ETC_CONFIG"; then
+            mv "$_old" "$FWU_ETC_CONFIG"
+            state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" \
+                "detail=配置目录切换失败，已还原原配置" "updated_at=$(iso_now)"
             die "$EX_STATE" "恢复失败，已还原原配置"
-        }
+        fi
     else
-        cp -a "$_src/." "$FWU_ETC_CONFIG/" || die "$EX_STATE" "合并恢复失败（已保留回滚前快照）"
+        # 合并模式：逐文件「先写同目录临时名，再 rename」，保证任何文件要么旧要么新，
+        # 不会出现半截文件（cp -a 直接覆盖时掉电会留下截断内容）
+        for _stale in "$FWU_ETC_CONFIG"/.*.fwu-tmp; do
+            [ -e "$_stale" ] && rm -f "$_stale"
+        done
+        for _f in "$_src"/*; do
+            [ -f "$_f" ] || continue
+            _base=$(basename "$_f")
+            _tmp="$FWU_ETC_CONFIG/.$_base.fwu-tmp"
+            rm -f "$_tmp"
+            cp -a "$_f" "$_tmp" || { rm -f "$_tmp"; die "$EX_STATE" "恢复 $_base 失败（已保留回滚前快照）"; }
+            mv -f "$_tmp" "$FWU_ETC_CONFIG/$_base" || { rm -f "$_tmp"; die "$EX_STATE" "替换 $_base 失败（已保留回滚前快照）"; }
+        done
     fi
 
     # 校验：逐个文件比对，不一致即报
@@ -444,12 +496,13 @@ cmd_rollback() {
         cmp -s "$_f" "$FWU_ETC_CONFIG/$(basename "$_f")" || _bad=$((_bad + 1))
     done
     if [ "$_bad" -gt 0 ]; then
-        state_replace "last_result=failed" "code=$EX_VERIFY" \
+        state_replace "phase=idle" "last_result=failed" "code=$EX_VERIFY" \
             "detail=配置回滚后有 $_bad 个文件与备份不一致，请核对" "updated_at=$(iso_now)"
         die "$EX_VERIFY" "校验失败：$_bad 个文件不一致"
     fi
 
-    state_replace "last_result=ok" "code=0" "detail=配置已从 $_confirm 恢复（模式=$([ "$_replace" = 1 ] && echo replace || echo merge)，$((_total - _missing)) 个覆盖、$_missing 个补回），重启或 reload 后生效" "updated_at=$(iso_now)"
+    state_replace "phase=idle" "last_result=ok" "code=0" "mixed_state=N" "rollback_backup=" \
+        "detail=配置已从 $_confirm 恢复（模式=$([ "$_replace" = 1 ] && echo replace || echo merge)，$((_total - _missing)) 个覆盖、$_missing 个补回），重启或 reload 后生效" "updated_at=$(iso_now)"
     printf '{"ok":true,"backup":"%s","mode":"%s","files":%d,"changed":%d,"missing":%d,"pre_snapshot":"%s"}\n' \
         "$(jesc "$_confirm")" "$([ "$_replace" = 1 ] && echo replace || echo merge)" \
         "$_total" "$_changed" "$_missing" "$(jesc "$FWU_ROOT/rollback/$_ts-pre")"

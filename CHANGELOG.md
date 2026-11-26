@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## v0.1.0-rc5 (2026-11-26)
+
+回滚路径掉电加固；故障矩阵补满 24/24。
+
+### 修复
+- **配置回滚掉电安全**（三个缺口）：
+  - `--replace` 改为「旁路目录构建 + 逐文件校验 + 两次 rename 切换」，消除「`/etc/config` 被移走后掉电导致配置目录消失」的窗口；
+  - 合并模式改为逐文件「临时名 + rename」，避免 `cp -a` 半途掉电留下截断文件；
+  - 写入前落 `phase=rollback` 标记，掉电后 `status` 收口为 `failed / mixed_state=C1` 并给出备份 ID 与补救方式，不再把中断当成上一次的 `ok`；
+  - 下次执行自动清理残留的 `.fwu-tmp` 与 `config.new-*`。
+- 回滚可重复执行（幂等）：中断后直接重跑同一备份即可收敛到一致状态。
+
+### 测试
+- `tests/test_core.sh` 增至 51 条（新增中断标记、C1 收口、幂等重跑、陈旧临时文件清理、replace 两阶段）。
+- 新增 `tests/device_rollback_interrupt.sh`：设备侧 `kill -9` 近似掉电，覆盖合并/replace 两条路径，实测 fail=0。
+- 故障矩阵 24/24；「boot 分区写坏 = 不可引导、线刷可恢复」经串口证据确认。
+
 ## v0.1.0-rc1 (2026-11-23)
 
 首个候选发布版本（rc1）。仅支持 OneCloud（ImmortalWrt 25.12 / apk / ucode LuCI），不承诺跨机型。

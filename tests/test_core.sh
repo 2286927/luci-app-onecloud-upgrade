@@ -90,6 +90,38 @@ _out=$(FWU_LIBDIR="$LIBDIR" FWU_ROOT="$R2" FWU_BACKUP_ROOT="$BK" FWU_ETC_CONFIG=
 [ -f "$CUR/b.conf" ] && ok "合并模式保留新增配置" || bad "合并模式误删 b.conf"
 echo "$_out" | grep -q '"ok":true' && ok "回滚返回 ok" || bad "回滚返回异常：$_out"
 [ -f "$R2/rollback/$(ls "$R2/rollback" | grep -m1 pre)/MANIFEST" ] && ok "回滚前快照已生成" || bad "缺少回滚前快照"
+ls -a "$CUR" | grep -q 'fwu-tmp' && bad "合并回滚残留临时文件" || ok "合并回滚无临时文件残留"
+
+echo "== 回滚中断（phase 标记 / 幂等重跑）=="
+RK="./rk"; CUR5="./cur-i"; R3="./root3"
+mkdir -p "$RK/test-bk/config" "$CUR5" "$R3"
+printf 'old\n' >"$RK/test-bk/config/a.conf"
+printf 'one\n' >"$CUR5/a.conf"
+# 模拟「写下意图标记之后被杀」
+FWU_ROOT="$R3" sh -c '. "$1"; state_replace "phase=rollback" "rollback_backup=test-bk" "last_result=none"' _ "$LIB" >/dev/null 2>&1
+grep -q '^phase=rollback' "$R3/state.env" && ok "回滚意图标记已写入" || bad "标记写入失败"
+_out=$(FWU_LIBDIR="$LIBDIR" FWU_ROOT="$R3" FWU_BACKUP_ROOT="$RK" FWU_ETC_CONFIG="$CUR5" FWU_LOCK="$TMP/l3.lock" sh "$CTL" recover 2>&1)
+grep -q '^phase=idle' "$R3/state.env" && ok "recover 把中断回滚收口到 idle" || bad "recover 未收口：$(cat "$R3/state.env")"
+grep -q '^mixed_state=C1' "$R3/state.env" && ok "标记混合态 C1" || bad "缺 C1 标记"
+grep -q '回滚未完成' "$R3/state.env" && ok "detail 说明回滚未完成" || bad "detail 未说明中断"
+# 幂等重跑：中断后允许直接再执行同一备份
+printf 'junk' >"$CUR5/.a.conf.fwu-tmp"
+_out=$(FWU_LIBDIR="$LIBDIR" FWU_ROOT="$R3" FWU_BACKUP_ROOT="$RK" FWU_ETC_CONFIG="$CUR5" FWU_LOCK="$TMP/l3.lock" sh "$CTL" rollback --confirm test-bk 2>&1)
+[ "$(cat "$CUR5/a.conf")" = "old" ] && ok "中断后可重跑并恢复成功" || bad "重跑未生效：$_out"
+ls -a "$CUR5" | grep -q 'fwu-tmp' && bad "陈旧临时文件未清理" || ok "陈旧 .fwu-tmp 已清理"
+grep -q '^phase=idle' "$R3/state.env" && ok "成功后 phase 回到 idle" || bad "成功后 phase 异常"
+grep -q '^last_result=ok' "$R3/state.env" && ok "成功后 last_result=ok" || bad "last_result 异常"
+
+echo "== 回滚 replace 模式（两阶段切换）=="
+R4="./root4"; CUR4="./cur-r"
+mkdir -p "$CUR4"
+printf 'keep\n' >"$CUR4/z.conf"
+printf 'one\n' >"$CUR4/a.conf"
+_out=$(FWU_LIBDIR="$LIBDIR" FWU_ROOT="$R4" FWU_BACKUP_ROOT="$RK" FWU_ETC_CONFIG="$CUR4" FWU_LOCK="$TMP/l4.lock" sh "$CTL" rollback --confirm test-bk --replace 2>&1)
+[ "$(ls -1 "$CUR4" | tr '\n' ' ')" = "a.conf " ] && ok "replace 只保留备份内文件" || bad "replace 结果异常：$(ls -1 "$CUR4" | tr '\n' ' ')"
+ls -d "$CUR4.pre-"* >/dev/null 2>&1 && ok "replace 留下旧目录快照" || bad "缺 .pre 旧目录快照"
+ls -d "$CUR4.new-"* >/dev/null 2>&1 && bad "残留 .new 旁路目录" || ok "无 .new 残留"
+grep -q '^phase=idle' "$R4/state.env" && ok "replace 成功后 phase=idle" || bad "replace 后 phase 异常"
 
 echo "== 升级结局判定 =="
 eq "重启+记录+版本一致 → ok" "$(recover_decide A B 30 1000 1100 '26.11.20_04.18.00' '26.11.20_04.18.00' '26.11.20_04.18.00')" "ok"
