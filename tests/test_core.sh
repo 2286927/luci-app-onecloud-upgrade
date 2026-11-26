@@ -123,6 +123,17 @@ ls -d "$CUR4.pre-"* >/dev/null 2>&1 && ok "replace 留下旧目录快照" || bad
 ls -d "$CUR4.new-"* >/dev/null 2>&1 && bad "残留 .new 旁路目录" || ok "无 .new 残留"
 grep -q '^phase=idle' "$R4/state.env" && ok "replace 成功后 phase=idle" || bad "replace 后 phase 异常"
 
+echo "== clean 清理快照 =="
+mkdir -p "$CUR4.pre-20260101-000000" "$CUR4.pre-20260102-000000" "$CUR4.new-20260103-000000"
+_out=$(FWU_LIBDIR="$LIBDIR" FWU_ROOT="$R4" FWU_BACKUP_ROOT="$RK" FWU_ETC_CONFIG="$CUR4" FWU_LOCK="$TMP/l4.lock" sh "$CTL" clean 2>&1)
+echo "$_out" | grep -q '"ok":true' && ok "clean 返回 ok" || bad "clean 返回异常：$_out"
+[ -d "$CUR4.pre-20260101-000000" ] && bad "旧 .pre 快照未清理" || ok "旧 .pre 快照已清理"
+[ -d "$CUR4.pre-20260102-000000" ] && bad "旧 .pre 快照未清理（2）" || ok "次新 .pre 快照已清理"
+_n=$(ls -d "$CUR4".pre-* 2>/dev/null | wc -l)
+[ "$_n" = "1" ] && ok "只保留 1 份 .pre 快照" || bad "快照剩余 $_n 份"
+ls -d "$CUR4".pre-2026112* >/dev/null 2>&1 && ok "保留的是最新（时间戳最大）那份" || bad "最新快照被误删"
+[ -d "$CUR4.new-20260103-000000" ] && bad ".new 残骸未清理" || ok ".new 残骸已清理"
+
 echo "== 升级结局判定 =="
 eq "重启+记录+版本一致 → ok" "$(recover_decide A B 30 1000 1100 '26.11.20_04.18.00' '26.11.20_04.18.00' '26.11.20_04.18.00')" "ok"
 eq "未重启且未超时 → pending" "$(recover_decide A A 100 1000 '' '' 'v' 'v')" "pending"

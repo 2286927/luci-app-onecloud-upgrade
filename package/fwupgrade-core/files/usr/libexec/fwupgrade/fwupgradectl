@@ -598,6 +598,20 @@ cmd_clean() {
     for _d in "$FWU_ROOT"/rollback/work-*; do
         [ -d "$_d" ] && { rm -rf "$_d"; _n=$((_n + 1)); }
     done
+    # --replace 留下的 /etc/config.pre-<ts> 快照只保留最新一份（glob 按时间戳字典序），
+    # .new-<ts> 是中断残骸，直接清
+    _keep=""
+    for _d in "$FWU_ETC_CONFIG".pre-*; do
+        [ -d "$_d" ] && _keep="$_d"
+    done
+    for _d in "$FWU_ETC_CONFIG".pre-*; do
+        [ -d "$_d" ] || continue
+        [ "$_d" = "$_keep" ] && continue
+        rm -rf "$_d"; _n=$((_n + 1))
+    done
+    for _d in "$FWU_ETC_CONFIG".new-*; do
+        [ -d "$_d" ] && { rm -rf "$_d"; _n=$((_n + 1)); }
+    done
     : >"$FWU_JOURNAL" 2>/dev/null
     emit "{\"ok\":true,\"removed\":$_n}"
 }
