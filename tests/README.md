@@ -12,6 +12,7 @@
 | `device_fault_longtail.sh` | 时钟错误、缺 usign、缺公钥、签名损坏、404、连接拒绝 | 设备上 `sh`（需先放已签名清单到 `/tmp/signed-src`） |
 | `concurrent_check.sh` | 两个 check 并发（唯一临时文件回归） | 设备上 `sh` |
 | `fixtures/` | 清单样例（含 dryrun/签名场景） | 静态数据 |
+| `device_rollback_interrupt.sh` | 回滚中断（`kill -9` 近似掉电）：合并/replace 两条路径，验标记、原子性、C1 收口、幂等重跑 | 设备上 `sh`（自带兜底副本与自动还原） |
 
 ## 前置
 
