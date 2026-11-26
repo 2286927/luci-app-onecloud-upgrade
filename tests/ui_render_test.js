@@ -113,8 +113,7 @@ function ctx(label, st, cfg) {
 		detail: '已是最新（26.11.21_08.59.21）', progress: 70, code: 0
 	}, { repo: 'a/b', tag: '', channel: 'stable', dry_run: '0', require_signature: '0', force: '0' });
 
-	eq('空闲时不显示残留进度', registry.get('oc-prog-txt').textContent, '—');
-	eq('空闲时进度条归零', Number(registry.get('oc-prog').value), 0);
+	eq('状态卡不再有进度条元素', registry.get('oc-prog'), undefined);
 
 	await new Promise((r) => setTimeout(r, 10));
 	await Promise.all(pollFns.map((f) => f()));
@@ -128,8 +127,9 @@ function ctx(label, st, cfg) {
 		detail: '正在写入（boot 为最后一步）', progress: 70, code: 0
 	}, { repo: 'a/b', dry_run: '0' });
 
-	eq('写入阶段显示百分比', registry.get('oc-prog-txt').textContent, '70%');
-	eq('写入阶段进度条有值', Number(registry.get('oc-prog').value), 70);
+	eq('写入阶段显示阶段名', registry.get('oc-phase').textContent, '阶段：写入 boot');
+	eq('写入阶段显示说明', registry.get('oc-detail').textContent, '说明：正在写入（boot 为最后一步）');
+	eq('写入阶段同样没有进度条', registry.get('oc-prog'), undefined);
 
 	console.log('== 视图：日志为空 ==');
 	registry.clear(); pollFns = []; calls.length = 0;

@@ -65,18 +65,6 @@ var callLogTail = rpc.declare({
 	params: [ 'lines' ]
 });
 
-// 阶段进度只在真正写盘时才有意义；其余阶段（ready/idle/failed）显示“—”
-// 后端 progress 是上一次写入留下的值，不能直接当当前进度画出来
-var ACTIVE_PHASES = { applying: 1, writing_boot: 1, boot_written: 1 };
-
-function activeProgress(st) {
-	return ACTIVE_PHASES[st && st.phase] ? (parseInt(st.progress, 10) || 0) : 0;
-}
-
-function progressText(st) {
-	return ACTIVE_PHASES[st && st.phase] ? (parseInt(st.progress, 10) || 0) + '%' : '—';
-}
-
 function badge(phase) {
 	var map = {
 		idle: '已就绪', checking: '检测中', ready: '可升级',
@@ -106,13 +94,7 @@ return view.extend({
 			E('p', { 'id': 'oc-phase' }, '阶段：' + badge(st.phase)),
 			E('p', { 'id': 'oc-current' }, '本机版本：' + (st.current || '—')),
 			E('p', { 'id': 'oc-version' }, '目标版本：' + (st.version || '—')),
-			E('p', { 'id': 'oc-detail' }, '说明：' + (st.detail || '—')),
-			E('p', {}, [
-				'阶段进度：',
-				E('progress', { 'id': 'oc-prog', 'max': 100, 'value': activeProgress(st), 'style': 'width:240px;vertical-align:middle' }),
-				' ',
-				E('span', { 'id': 'oc-prog-txt' }, progressText(st))
-			])
+			E('p', { 'id': 'oc-detail' }, '说明：' + (st.detail || '—'))
 		]);
 
 		// 保存后把服务端真实值回填：用户能立刻看出「清空」有没有生效
@@ -308,10 +290,6 @@ return view.extend({
 				document.getElementById('oc-current').textContent = '本机版本：' + (s.current || '—');
 				document.getElementById('oc-version').textContent = '目标版本：' + (s.version || '—');
 				document.getElementById('oc-detail').textContent = '说明：' + (s.detail || '—');
-				var pr = document.getElementById('oc-prog');
-				if (pr) pr.value = activeProgress(s);
-				var pt = document.getElementById('oc-prog-txt');
-				if (pt) pt.textContent = progressText(s);
 			});
 			callLogTail(40).then(function(r) {
 				var el = document.getElementById('oc-log');
