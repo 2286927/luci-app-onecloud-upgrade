@@ -45,20 +45,25 @@ case "$_METHOD" in
     config_set)
         _params=$(cat)
         for _k in provider repo base_url asset_rootfs asset_boot channel tag dry_run force require_signature; do
+            # jsonfilter：键不存在 → rc=1；键存在但值为空串 → rc=0 且输出空行。
+            # 必须靠 rc 判断「有没有传这个字段」，否则用户把输入框清空会被当成「没传」而跳过，
+            # 表现就是「删掉 tag 保存，刷新后又回来了」。
             _v=$(printf '%s' "$_params" | jsonfilter -e "@.$_k" 2>/dev/null)
-            [ -n "$_v" ] || continue
+            [ "$?" = "0" ] || continue
             case "$_k" in
                 provider)
-                    case "$_v" in github-release|static-https|local-file) : ;; *) _v="" ;; esac
+                    case "$_v" in github-release|static-https|local-file) : ;; *) continue ;; esac
                     ;;
                 channel)
-                    case "$_v" in stable|beta|dev) : ;; *) _v="" ;; esac
+                    case "$_v" in stable|beta|dev) : ;; *) continue ;; esac
                     ;;
                 dry_run|force|require_signature)
-                    case "$_v" in 0|1) : ;; *) _v="" ;; esac
+                    case "$_v" in 0|1) : ;; *) continue ;; esac
+                    ;;
+                *)
+                    # 文本字段（repo / base_url / asset_rootfs / asset_boot / tag）：允许清空
                     ;;
             esac
-            [ -n "$_v" ] || continue
             uci -q set "onecloud-upgrade.main.$_k=$_v" || true
         done
         uci -q commit onecloud-upgrade

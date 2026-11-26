@@ -115,6 +115,24 @@ return view.extend({
 			])
 		]);
 
+		// 保存后把服务端真实值回填：用户能立刻看出「清空」有没有生效
+		function applyCfgToForm(c) {
+			if (!c) return;
+			var map = {
+				'oc-repo': 'repo', 'oc-tag': 'tag', 'oc-rootfs': 'asset_rootfs',
+				'oc-boot': 'asset_boot', 'oc-channel': 'channel'
+			};
+			Object.keys(map).forEach(function(id) {
+				var el = document.getElementById(id);
+				if (el) el.value = c[map[id]] || '';
+			});
+			var chk = { 'oc-dry': 'dry_run', 'oc-sig': 'require_signature', 'oc-force': 'force' };
+			Object.keys(chk).forEach(function(id) {
+				var el = document.getElementById(id);
+				if (el) el.checked = (c[chk[id]] === '1');
+			});
+		}
+
 		var form = E('div', { 'class': 'cbi-section' }, [
 			E('h3', {}, '固件源'),
 			E('div', { 'class': 'cbi-value' }, [
@@ -182,7 +200,11 @@ return view.extend({
 							document.getElementById('oc-dry').checked ? '1' : '0',
 							document.getElementById('oc-force').checked ? '1' : '0',
 							document.getElementById('oc-sig').checked ? '1' : '0'
-						).then(function() { ui.addNotification(null, E('p', {}, '已保存'), 'info'); });
+						).then(function() {
+							return callConfigGet().then(function(c) { applyCfgToForm(c); });
+						}).then(function() {
+							ui.addNotification(null, E('p', {}, '已保存（表单已按设备实际值回填）'), 'info');
+						});
 					})
 				}, '保存')
 			])
