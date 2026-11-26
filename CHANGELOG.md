@@ -1,8 +1,10 @@
 # CHANGELOG
 
-## v0.1.0-rc5 (2026-11-26)
+## v0.1.0 (2026-11-26)
 
-回滚路径掉电加固；故障矩阵补满 24/24。
+首个正式版本。仅支持 OneCloud（ImmortalWrt 25.12-SNAPSHOT / apk / ucode LuCI），不承诺跨机型。
+
+回滚路径掉电加固；故障矩阵补满 24/24；「boot 分区写坏 = 不可引导、线刷可恢复」经串口证据确认。
 
 ### 修复
 - **配置回滚掉电安全**（三个缺口）：
@@ -13,9 +15,13 @@
 - 回滚可重复执行（幂等）：中断后直接重跑同一备份即可收敛到一致状态。
 
 ### 测试
-- `tests/test_core.sh` 增至 51 条（新增中断标记、C1 收口、幂等重跑、陈旧临时文件清理、replace 两阶段）。
+- `tests/test_core.sh` 增至 57 条（新增中断标记、C1 收口、幂等重跑、陈旧临时文件清理、replace 两阶段）。
 - 新增 `tests/device_rollback_interrupt.sh`：设备侧 `kill -9` 近似掉电，覆盖合并/replace 两条路径，实测 fail=0。
-- 故障矩阵 24/24；「boot 分区写坏 = 不可引导、线刷可恢复」经串口证据确认。
+- 故障矩阵 24/24；「boot 分区写坏 = 不可引导、线刷可恢复」经串口证据确认（U-Boot `fatload mmc 1:1` 失败 → `Invalid boot device` → `m8b_onecloud#` 循环，线刷两次均恢复成功）。
+
+### 其它
+- `clean` 现在清理 `/etc/config.pre-*`（只保留最新一份）与 `/etc/config.new-*` 残骸。
+- CI：`prerelease` 改按 tag 判定（含 `-rc` 才是预发布）。
 
 ## v0.1.0-rc1 (2026-11-23)
 

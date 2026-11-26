@@ -51,11 +51,19 @@ make package/luci-app-onecloud-upgrade/compile V=s
 
 ## 发布状态
 
-`v0.1.0-rc1`：候选发布（pre-release）。已完成：主链路真机验证（含一次真实重刷）、结局判定修复、CI 打包（5 个 noarch apk）、apk 真机安装纳管、6 条关键故障注入、演练/强制开关与阶段进度、页面实测（保存开关、检测、备份表恢复/删除）、安装/救援/兼容文档。签名已支持（清单 usign 验签，`require_signature=1` 可强制）。剩余：i18n、离线包（需改设备脚本）、完整 24 条故障矩阵（已做 22 条，剩 2 条破坏性）。
+`v0.1.0`：正式版（仅 OneCloud / 25.12-SNAPSHOT / apk / ucode LuCI）。
+
+已完成：主链路真机验证（含一次真实在线升级 26.11.17 → 26.11.18）、结局判定修复（boot_id + `reboot-ok` 记录 + 版本三方一致）、CI 打包（5 个 noarch apk）、apk 真机安装/卸载回归、**故障矩阵 24/24**、演练/强制开关与阶段进度、页面实测、安装/救援/兼容文档。
+
+关键安全性结论（均为实机证据）：
+- **boot 分区写坏 = 不可引导**（U-Boot `fatload mmc 1:1` 失败 → `Invalid boot device` → `m8b_onecloud#` 循环，约 15s 看门狗复位），恢复只能线刷或 U-Boot 提示符人工修；线刷恢复已两次实证。
+- **回滚支持掉电中断**：写入前落 `phase=rollback` 标记，中断后 `status` 收口为 `failed / C1` 并给出补救方式；`--replace` 旁路构建后两次 rename 切换，合并模式逐文件原子替换；回滚幂等可重跑。
+
+已知未做：i18n（仅中文）、离线升级包（受设备侧 `/usr/bin/upgrade` 限制，需改脚本）。
 
 ## 下载
 
-预发布产物：<https://github.com/2286927/luci-app-onecloud-upgrade/releases/tag/v0.1.0-rc4>（5 个 apk，`noarch`）。
+正式产物：<https://github.com/2286927/luci-app-onecloud-upgrade/releases/tag/v0.1.0>（5 个 apk，`noarch`）。
 打 tag 时 CI 会自动把 apk 附到 Release。
 
 ## Screenshots / 截图
