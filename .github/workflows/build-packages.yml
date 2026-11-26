@@ -20,6 +20,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: 静态检查与单测
+        run: |
+          set -e
+          git ls-files '*.sh' | while read -r f; do sh -n "$f"; done
+          for f in \
+            package/fwupgrade-core/files/etc/init.d/fwupgrade \
+            package/fwupgrade-core/files/usr/libexec/fwupgrade/fwupgradectl \
+            package/luci-app-onecloud-upgrade/root/usr/libexec/rpcd/luci.onecloud-upgrade ; do
+            sh -n "$f"
+          done
+          sh tests/test_core.sh
+          node tests/ui_render_test.js
+          echo "静态检查 + 单测通过"
+
       - name: 释放磁盘
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true

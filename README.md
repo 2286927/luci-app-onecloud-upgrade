@@ -72,7 +72,7 @@ apk add --allow-untrusted --force-overwrite --repositories-file /dev/null /tmp/*
 | [救援指引](docs/救援指引.md) | 失败判定、boot 破坏现场特征、线刷与 U-Boot 提示符两条恢复路径 |
 | [签名与密钥](docs/签名与密钥.md) | usign 清单签名、密钥轮换、私钥保管 |
 | [开发备忘](docs/开发备忘.md) | LuCI / rpcd 的三处坑（视图目录、exec 协议、并发） |
-| [发布说明 v0.1.1](docs/发布说明-0.1.1.md) | 本版修了什么（tag、按清单写入、快速失败、陈旧签名） |
+| [发布说明 v0.1.1](docs/发布说明-0.1.1.md) | tag、按清单写入、快速失败、陈旧签名 |
 | [发布说明 v0.1.0](docs/发布说明-0.1.0.md) | 首个正式版内容与已知限制 |
 | [破坏性测试预案](docs/破坏性测试预案.md) | 掉电/损坏类测试的前置条件、步骤与实测结论 |
 | [发布评估](docs/发布评估-20261123.md) | 完整评审记录：问题清单、修复、故障矩阵、升级验收 |
@@ -80,7 +80,7 @@ apk add --allow-untrusted --force-overwrite --repositories-file /dev/null /tmp/*
 
 ## 发布状态
 
-**v0.1.1**（2026-11-26）。产物：<https://github.com/2286927/luci-app-onecloud-upgrade/releases/tag/v0.1.1>，5 个 noarch apk。打 tag 时 CI 自动构建并附加到 Release。
+**v0.1.2**（2026-11-26）。产物：<https://github.com/2286927/luci-app-onecloud-upgrade/releases/tag/v0.1.2>，5 个 noarch apk。打 tag 时 CI 自动构建并附加到 Release。
 
 已完成的实机验证：
 

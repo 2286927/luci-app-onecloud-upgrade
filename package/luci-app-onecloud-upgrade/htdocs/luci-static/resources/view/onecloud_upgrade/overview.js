@@ -62,9 +62,20 @@ var callRollback = rpc.declare({
 var callLogTail = rpc.declare({
 	object: 'luci.onecloud-upgrade',
 	method: 'log_tail',
-	params: [ 'lines' ],
-	expect: { lines: '' }
+	params: [ 'lines' ]
 });
+
+// 阶段进度只在真正写盘时才有意义；其余阶段（ready/idle/failed）显示“—”
+// 后端 progress 是上一次写入留下的值，不能直接当当前进度画出来
+var ACTIVE_PHASES = { applying: 1, writing_boot: 1, boot_written: 1 };
+
+function activeProgress(st) {
+	return ACTIVE_PHASES[st && st.phase] ? (parseInt(st.progress, 10) || 0) : 0;
+}
+
+function progressText(st) {
+	return ACTIVE_PHASES[st && st.phase] ? (parseInt(st.progress, 10) || 0) + '%' : '—';
+}
 
 function badge(phase) {
 	var map = {
@@ -96,7 +107,12 @@ return view.extend({
 			E('p', { 'id': 'oc-current' }, '本机版本：' + (st.current || '—')),
 			E('p', { 'id': 'oc-version' }, '目标版本：' + (st.version || '—')),
 			E('p', { 'id': 'oc-detail' }, '说明：' + (st.detail || '—')),
-			E('p', {}, [ '阶段进度：', E('progress', { 'id': 'oc-prog', 'max': 100, 'value': 0, 'style': 'width:240px;vertical-align:middle' }) ])
+			E('p', {}, [
+				'阶段进度：',
+				E('progress', { 'id': 'oc-prog', 'max': 100, 'value': activeProgress(st), 'style': 'width:240px;vertical-align:middle' }),
+				' ',
+				E('span', { 'id': 'oc-prog-txt' }, progressText(st))
+			])
 		]);
 
 		var form = E('div', { 'class': 'cbi-section' }, [
@@ -261,7 +277,7 @@ return view.extend({
 				: E('p', {}, '没有可用备份')
 		]);
 
-		var logEl = E('pre', { 'id': 'oc-log', 'style': 'max-height:260px;overflow:auto;font-size:12px' }, '');
+		var logEl = E('pre', { 'id': 'oc-log', 'style': 'max-height:260px;overflow:auto;font-size:12px' }, '（读取中…）');
 
 		this.refresh = function() {
 			callStatus().then(function(s) {
@@ -271,12 +287,26 @@ return view.extend({
 				document.getElementById('oc-version').textContent = '目标版本：' + (s.version || '—');
 				document.getElementById('oc-detail').textContent = '说明：' + (s.detail || '—');
 				var pr = document.getElementById('oc-prog');
-				if (pr) pr.value = s.progress || 0;
+				if (pr) pr.value = activeProgress(s);
+				var pt = document.getElementById('oc-prog-txt');
+				if (pt) pt.textContent = progressText(s);
 			});
 			callLogTail(40).then(function(r) {
-				if (r && r.lines) document.getElementById('oc-log').textContent = r.lines;
+				var el = document.getElementById('oc-log');
+				if (!el) return;
+				var body = (r && r.lines) ? String(r.lines) : '';
+				el.textContent = body || '（暂无日志）';
+				el.scrollTop = el.scrollHeight;
+			}).catch(function() {
+				var el = document.getElementById('oc-log');
+				if (el && !el.textContent) el.textContent = '（日志读取失败）';
 			});
 		};
+
+		// 首屏主动拉一次：poll 由 LuCI 启动，若视图挂载时机不巧会一直不触发，
+		// 日志区就会永远停在初始文本上。这里补一次延迟调用兜底。
+		var _self = this;
+		window.setTimeout(function() { _self.refresh(); }, 300);
 
 		poll.add(this.refresh.bind(this), 3);
 

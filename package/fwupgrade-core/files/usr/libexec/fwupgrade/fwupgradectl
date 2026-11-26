@@ -86,20 +86,21 @@ cmd_check() {
     fi
     space_gate
 
+    # progress 归零：检测结束时已不在写入阶段，留着上一次的 70% 会让界面显示假进度
     if [ "$UPDATE_AVAILABLE" = "force" ]; then
-        state_replace "phase=ready" "last_result=ok" "code=0" \
+        state_replace "phase=ready" "last_result=ok" "code=0" "progress=0" \
             "current=$(local_version)" "version=$M_VERSION" "target=$M_TARGET" \
             "detail=强制重刷模式：将重写同版本 $M_VERSION" "updated_at=$(iso_now)"
     elif [ "$UPDATE_AVAILABLE" = "yes" ]; then
-        state_replace "phase=ready" "last_result=ok" "code=0" \
+        state_replace "phase=ready" "last_result=ok" "code=0" "progress=0" \
             "current=$(local_version)" "version=$M_VERSION" "target=$M_TARGET" \
             "detail=发现新版本 $M_VERSION（build_ts=$M_BUILD_TS）" "updated_at=$(iso_now)"
     elif [ "$UPDATE_AVAILABLE" = "unknown" ]; then
-        state_replace "phase=idle" "last_result=ok" "code=0" \
+        state_replace "phase=idle" "last_result=ok" "code=0" "progress=0" \
             "current=$(local_version)" "version=$M_VERSION" "target=$M_TARGET" \
             "detail=版本无法比较（清单版本不规范且缺构建时间），需修正清单或强制重刷" "updated_at=$(iso_now)"
     else
-        state_replace "phase=idle" "last_result=ok" "code=0" \
+        state_replace "phase=idle" "last_result=ok" "code=0" "progress=0" \
             "current=$(local_version)" "version=$M_VERSION" "target=$M_TARGET" \
             "detail=已是最新（$M_VERSION）" "updated_at=$(iso_now)"
     fi

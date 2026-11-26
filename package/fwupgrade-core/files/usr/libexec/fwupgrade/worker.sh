@@ -33,7 +33,7 @@ trap 'lock_release' EXIT INT TERM
 
 config_load
 [ -s "$WORK/manifest.json" ] || {
-    state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" "detail=缺少已检测的清单"
+    state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" "progress=0" "detail=缺少已检测的清单"
     exit "$EX_STATE"
 }
 manifest_load "$WORK/manifest.json"
@@ -57,7 +57,7 @@ state_replace "phase=applying" "last_result=none" "job_id=$JOB" "progress=5" \
 . "$FLASHER_PATH"
 
 if ! flasher_preflight; then
-    state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" "detail=预检未通过"
+    state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" "progress=0" "detail=预检未通过"
     exit "$EX_STATE"
 fi
 
@@ -66,7 +66,7 @@ state_replace "phase=applying" "progress=40" "detail=预检通过，进入写入
 # L1 安全网：真实写入前先把 /etc/config 备份到可寻址目录；dry-run 不占空间
 if [ "${C_DRY_RUN:-1}" != "1" ]; then
     backup_config "$FWU_ROOT/backup/$JOB" || {
-        state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" "detail=配置备份失败，已中止"
+        state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" "progress=0" "detail=配置备份失败，已中止"
         exit "$EX_STATE"
     }
     state_replace "phase=applying" "progress=45" "detail=配置已备份到 backup/$JOB" "updated_at=$(iso_now)"
@@ -96,7 +96,7 @@ if [ "$_rc" -eq 0 ]; then
             _st=$(state_get apply_started)
             case "$_lts" in ''|*[!0-9]*) _lts=0 ;; esac
             if [ "$_lts" -ge "${_st:-0}" ] 2>/dev/null; then
-                state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" "mixed_state=N" \
+                state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" "progress=0" "mixed_state=N" \
                     "detail=设备脚本判定已是最新、未写入（$_last）；请核对目标版本与 --url/OC_REPO 指向" \
                     "updated_at=$(iso_now)"
                 exit "$EX_STATE"
@@ -113,6 +113,6 @@ if [ "$_rc" -eq 0 ]; then
     exit 0
 fi
 
-state_replace "phase=idle" "last_result=failed" "code=$_rc" \
+state_replace "phase=idle" "last_result=failed" "code=$_rc" "progress=0" \
     "detail=写入失败（退出码 $_rc），系统可能处于混合态，请核对" "updated_at=$(iso_now)"
 exit "$_rc"

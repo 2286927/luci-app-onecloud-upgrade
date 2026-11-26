@@ -24,3 +24,4 @@
 
 - **写 boot 中途掉电**：需要 USB 双公头线 + 现场烧录能力；串口 `bootdelay=0` 无法停在 U-Boot。步骤见 `docs/破坏性测试预案.md`。
 - **回滚中途掉电**：依赖 L2 快照能力（未实现）。
+| `ui_render_test.js` | 视图渲染冒烟：进度文本（空闲 `—` / 写入百分比）、`log_tail` 内容、空日志提示；用桩件跑真实 overview.js | 工作站 `node tests/ui_render_test.js` |
