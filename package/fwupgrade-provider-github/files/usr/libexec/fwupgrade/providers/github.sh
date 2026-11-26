@@ -10,11 +10,19 @@ API_BASE="${API_BASE:-https://api.github.com}"
 provider_resolve() {
     _work="$1"
     mkdir -p "$_work" || die "$EX_STATE" "无法创建工作目录 $_work"
+    # 先清掉上一轮可能留下的签名：本仓若不带签名，不能继承旧 .sig
+    rm -f "$_work/manifest.json.sig"
 
-    case "${C_CHANNEL:-stable}" in
-        beta|dev) _url="$API_BASE/repos/$C_REPO/releases?per_page=5" ;;
-        *)        _url="$API_BASE/repos/$C_REPO/releases/latest" ;;
-    esac
+    if [ -n "${C_TAG:-}" ]; then
+        # 一仓多机型：每个机型一个 Release tag，latest 会指到别的机型，必须指定
+        _url="$API_BASE/repos/$C_REPO/releases/tags/$C_TAG"
+        log "按指定 tag 取 release：$_url"
+    else
+        case "${C_CHANNEL:-stable}" in
+            beta|dev) _url="$API_BASE/repos/$C_REPO/releases?per_page=5" ;;
+            *)        _url="$API_BASE/repos/$C_REPO/releases/latest" ;;
+        esac
+    fi
     log "取 release：$_url"
     if ! http_fetch "$_url" "$_work/release.json"; then
         if grep -qi "rate limit" "$_work/release.json" 2>/dev/null; then

@@ -134,6 +134,19 @@ _n=$(ls -d "$CUR4".pre-* 2>/dev/null | wc -l)
 ls -d "$CUR4".pre-2026112* >/dev/null 2>&1 && ok "保留的是最新（时间戳最大）那份" || bad "最新快照被误删"
 [ -d "$CUR4.new-20260103-000000" ] && bad ".new 残骸未清理" || ok ".new 残骸已清理"
 
+echo "== 清单资产地址 =="
+R9="./root9"; mkdir -p "$R9"
+cat >"$R9/manifest.env" <<'MEOF'
+ASSET_COUNT=2
+ASSET_0_KIND=rootfs
+ASSET_0_URL=https://example.invalid/releases/download/T1/rootfs.tar.gz
+ASSET_1_KIND=boot
+ASSET_1_URL=https://example.invalid/releases/download/T1/boot.tar.gz
+MEOF
+eq "取 rootfs 地址" "$(FWU_ROOT="$R9" sh -c '. "$1"; asset_url_by_role rootfs' _ "$LIB")" "https://example.invalid/releases/download/T1/rootfs.tar.gz"
+eq "取 boot 地址" "$(FWU_ROOT="$R9" sh -c '. "$1"; asset_url_by_role boot' _ "$LIB")" "https://example.invalid/releases/download/T1/boot.tar.gz"
+FWU_ROOT="$R9" sh -c '. "$1"; asset_url_by_role nosuch' _ "$LIB" >/dev/null 2>&1 && bad "未知角色应返回非 0" || ok "未知角色返回非 0"
+
 echo "== 包注册自检 =="
 DB1="./apkdb-yes"; DB2="./apkdb-no"
 printf 'P:busybox\nV:1.0\nP:luci-app-onecloud-upgrade\nV:0.1.0-r1\n' >"$DB1"

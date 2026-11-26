@@ -30,7 +30,7 @@ var callConfigGet = rpc.declare({
 var callConfigSet = rpc.declare({
 	object: 'luci.onecloud-upgrade',
 	method: 'config_set',
-	params: [ 'provider', 'repo', 'asset_rootfs', 'asset_boot', 'channel', 'dry_run', 'force', 'require_signature' ],
+	params: [ 'provider', 'repo', 'asset_rootfs', 'asset_boot', 'channel', 'tag', 'dry_run', 'force', 'require_signature' ],
 	expect: { ok: true }
 });
 
@@ -107,6 +107,13 @@ return view.extend({
 					E('input', { 'id': 'oc-repo', 'type': 'text', 'value': cfg.repo || '', 'style': 'width:100%' }))
 			]),
 			E('div', { 'class': 'cbi-value' }, [
+				E('label', { 'class': 'cbi-value-title' }, '指定 tag'),
+				E('div', { 'class': 'cbi-value-field' }, [
+					E('input', { 'id': 'oc-tag', 'type': 'text', 'value': cfg.tag || '', 'style': 'width:100%' }),
+					E('span', { 'class': 'cbi-value-description' }, ' 留空 = 取 latest。一仓多机型（每个机型一个 Release tag）时必须填，否则会取到别的机型')
+				])
+			]),
+			E('div', { 'class': 'cbi-value' }, [
 				E('label', { 'class': 'cbi-value-title' }, 'rootfs 资产名'),
 				E('div', { 'class': 'cbi-value-field' },
 					E('input', { 'id': 'oc-rootfs', 'type': 'text', 'value': cfg.asset_rootfs || '', 'style': 'width:100%' }))
@@ -155,6 +162,7 @@ return view.extend({
 							document.getElementById('oc-rootfs').value,
 							document.getElementById('oc-boot').value,
 							document.getElementById('oc-channel').value,
+							document.getElementById('oc-tag').value,
 							document.getElementById('oc-dry').checked ? '1' : '0',
 							document.getElementById('oc-force').checked ? '1' : '0',
 							document.getElementById('oc-sig').checked ? '1' : '0'

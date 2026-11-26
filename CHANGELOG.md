@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## v0.1.1 (2026-11-26)
+
+跨仓库升级可用性修复（由「用另一个仓库的玩客云固件实测」暴露）。
+
+### 修复
+- **`tag` 选项**：`provider` 支持按 tag 取 Release（`/releases/tags/<tag>`），配置项 `onecloud-upgrade.main.tag`，页面新增「指定 tag」输入。一仓多机型时 `latest` 会指到别的机型，必须用它。
+- **写入链路改用清单地址**：`flashers/onecloud.sh` 现在以 `--url=<清单里的 rootfs 直链>` 调用设备脚本，并导出 `OC_REPO=<配置的仓库>`。此前脚本完全忽略应用解析结果，按自己的 `/etc/oc-repo` 判「已是最新」后 exit 0，一个字节没写。
+- **「已是最新」不再冒充写入成功**：`worker.sh` 在 `rc=0` 后检查 `/opt/oc-upgrade.last` 的末条记录，若是本轮的 `uptodate`，立刻判 `failed` 并说明原因（原来要干等 15 分钟超时）。
+- **陈旧签名误报**：`check` 现在把 `manifest.json` 与 `manifest.json.sig` 一起清；provider 解析前也清残留 `.sig`。否则从「有签名的源」切到「无签名的源」会拿旧签名验新清单，误报 rc=6。
+
+### 测试
+- 单测 60 → 63 条（`asset_url_by_role`、清单资产地址、包注册自检）。
+- 实测：固件源切到 `ImmortalWrt-MultiDevice` 的 `26.11.21_08.59.21`，`26.11.18_16.27.30 → 26.11.21_08.59.21` 升级成功，配置 40 文件保留，`reboot-ok` 记录的 sha 与 Release 摘要一致。
+
 ## Unreleased
 
 - `status` 新增「包管理」一行：`pkg_registered()` 读 `/lib/apk/db/installed`，区分「已注册 / 未注册（文件在位但 apk 无记录）/ 无法确认」。在线升级会用新镜像的数据库整包覆盖，若镜像未打包本应用，文件残留但注册丢失——重装需 `--force-overwrite`（细节见 `docs/固件接入.md`）。

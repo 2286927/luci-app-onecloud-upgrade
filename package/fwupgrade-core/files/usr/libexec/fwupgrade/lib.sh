@@ -333,6 +333,19 @@ asset_get() {
     mget "ASSET_$1_$(printf '%s' "$2" | tr 'a-z' 'A-Z')"
 }
 
+# asset_url_by_role <rootfs|boot>：返回清单里该角色的下载地址（取不到返回 1）
+asset_url_by_role() {
+    _want="$1"; _i=0; _n=$(mget ASSET_COUNT)
+    while [ "$_i" -lt "${_n:-0}" ]; do
+        if [ "$(asset_get "$_i" kind)" = "$_want" ]; then
+            asset_get "$_i" url
+            return 0
+        fi
+        _i=$((_i + 1))
+    done
+    return 1
+}
+
 # ---------- 签名 ----------
 # 规则：有 .sig 就必须验；require_signature=1 时没有 .sig 直接拒绝。
 verify_manifest_sig() {
@@ -405,6 +418,8 @@ config_load() {
     C_ASSET_ROOTFS=$(conf_get asset_rootfs) || C_ASSET_ROOTFS=""
     C_ASSET_BOOT=$(conf_get asset_boot) || C_ASSET_BOOT=""
     C_CHANNEL=$(conf_get channel) || C_CHANNEL="stable"
+    # 指定 tag：一仓多机型（每个机型一个 Release tag）时必须用，否则 stable 会取到别的机型
+    C_TAG=$(conf_get tag) || C_TAG=""
     C_TOKEN_FILE=$(conf_get token_file) || C_TOKEN_FILE=""
     C_MIRROR=$(conf_get mirror) || C_MIRROR=""
     C_DRY_RUN=$(conf_get dry_run) || C_DRY_RUN="1"

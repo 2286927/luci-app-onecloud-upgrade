@@ -62,7 +62,8 @@ cmd_check() {
     if command -v flock >/dev/null 2>&1; then
         exec 9>"$FWU_ROOT/check.lock" 2>/dev/null && flock 9
     fi
-    rm -f "$WORK/manifest.json"
+    # 上一轮的清单与签名一起清：只清 manifest 会让旧 .sig 去验新清单，误报签名失败
+    rm -f "$WORK/manifest.json" "$WORK/manifest.json.sig"
     log "开始检测：provider=$C_PROVIDER channel=$C_CHANNEL"
     state_replace "phase=checking" "last_result=none" "detail=正在检测" "job_id=$(date +%s)-$$"
 
@@ -623,9 +624,10 @@ cmd_clean() {
 
 cmd_config() {
     config_load
-    printf '{"provider":"%s","repo":"%s","base_url":"%s","asset_rootfs":"%s","asset_boot":"%s","channel":"%s","dry_run":"%s","force":"%s","require_signature":"%s","mirror":"%s","token":"%s"}\n' \
+    printf '{"provider":"%s","repo":"%s","base_url":"%s","asset_rootfs":"%s","asset_boot":"%s","channel":"%s","tag":"%s","dry_run":"%s","force":"%s","require_signature":"%s","mirror":"%s","token":"%s"}\n' \
         "$(jesc "$C_PROVIDER")" "$(jesc "$C_REPO")" "$(jesc "$C_BASE")" \
         "$(jesc "$C_ASSET_ROOTFS")" "$(jesc "$C_ASSET_BOOT")" "$(jesc "$C_CHANNEL")" \
+        "$(jesc "${C_TAG:-}")" \
         "${C_DRY_RUN:-1}" "${C_FORCE:-0}" "${C_REQUIRE_SIG:-0}" "$(jesc "$C_MIRROR")" "$([ -n "$C_TOKEN_FILE" ] && echo configured || echo none)"
 }
 

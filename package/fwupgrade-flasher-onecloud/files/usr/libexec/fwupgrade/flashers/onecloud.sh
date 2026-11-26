@@ -39,13 +39,25 @@ flasher_prepare() {
 }
 
 # 写入：这一步会让设备重启，本进程随之中断
+#
+# 为什么要带 --url：设备脚本默认自己去 /releases/latest（或 /etc/oc-repo）找目标，
+# 完全不看应用解析出的清单。于是会出现「应用说可升 26.11.21，脚本却按自己的仓库判定
+# 已是最新、直接退出 0」的假象（2026-11-26 实测）。修法：
+#   ① --url=<清单里的 rootfs 直链> —— 脚本从 URL 的 /download/<TAG>/ 派生目标版本；
+#   ② OC_REPO=<应用配置的仓库>    —— 脚本去同一个仓库、同一个 TAG 取 sha256 校验。
+# 两者都设，才是真正「按清单升级」。
 flasher_apply() {
+    _u=$(asset_url_by_role rootfs)
+    [ -n "$_u" ] || { log "写入失败：清单里没有 rootfs 资产地址，拒绝调用设备脚本"; return 2; }
+    if [ -n "${C_REPO:-}" ]; then
+        OC_REPO="$C_REPO"; export OC_REPO
+    fi
     if [ "${C_FORCE:-0}" = "1" ]; then
-        log "写入开始：$UP_BIN --reboot --force（同版本强制重刷）"
-        "$UP_BIN" --reboot --force >>"$UP_LOG" 2>&1
+        log "写入开始：$UP_BIN --reboot --force --url=<rootfs>（OC_REPO=${C_REPO:-未设}，同版本强制重刷）"
+        "$UP_BIN" --reboot --force --url="$_u" >>"$UP_LOG" 2>&1
     else
-        log "写入开始：$UP_BIN --reboot"
-        "$UP_BIN" --reboot >>"$UP_LOG" 2>&1
+        log "写入开始：$UP_BIN --reboot --url=<rootfs>（OC_REPO=${C_REPO:-未设}）"
+        "$UP_BIN" --reboot --url="$_u" >>"$UP_LOG" 2>&1
     fi
     return $?
 }

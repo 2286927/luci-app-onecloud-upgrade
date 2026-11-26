@@ -86,6 +86,24 @@ if [ "$_rc" -eq 0 ]; then
             "detail=dry-run 完成（未写盘）" "updated_at=$(iso_now)"
         exit 0
     fi
+    # rc=0 有两种含义，必须分开：写入完成并调度重启；或设备脚本判定「已是最新」直接退出。
+    # 后者一个字节都没写，若记成 boot_written，要等 15 分钟无重启才判失败，还会误报「重启已调度」。
+    # 设备脚本对这两种情况都会写 /opt/oc-upgrade.last，用记录类型 + 时间戳区分。
+    _last=$(tail -n 1 "$FWU_LAST_FILE" 2>/dev/null)
+    case "$_last" in
+        *uptodate*)
+            _lts=$(date -d "$(printf '%s' "$_last" | cut -d' ' -f1-2)" +%s 2>/dev/null)
+            _st=$(state_get apply_started)
+            case "$_lts" in ''|*[!0-9]*) _lts=0 ;; esac
+            if [ "$_lts" -ge "${_st:-0}" ] 2>/dev/null; then
+                state_replace "phase=idle" "last_result=failed" "code=$EX_STATE" "mixed_state=N" \
+                    "detail=设备脚本判定已是最新、未写入（$_last）；请核对目标版本与 --url/OC_REPO 指向" \
+                    "updated_at=$(iso_now)"
+                exit "$EX_STATE"
+            fi
+            ;;
+    esac
+
     # onecloud 的 upgrade --reboot 会把重启丢到 setsid 子进程并立即返回 0，
     # 所以 rc=0 只代表「写入完成、重启已调度」，不代表失败。
     # 真正的判定交给引导后的 recover（比对 /etc/oc-version）与 uptime。

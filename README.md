@@ -10,12 +10,12 @@
 
 | 能力 | 说明 |
 |---|---|
-| 检测 | GitHub Release / 静态 HTTPS 目录 / 本地文件三种源，统一成 `manifest.json`；比版本、比平台、比资产 size 与 sha256 |
+| 检测 | GitHub Release / 静态 HTTPS 目录 / 本地文件三种源，统一成 `manifest.json`；比版本、比平台、比资产 size 与 sha256。**可用 `tag` 指定具体 Release**（一仓多机型必备，否则 latest 会指到别的机型） |
 | 验签 | manifest 用 usign(ed25519) detached 签名，公钥随包安装；`require_signature=1` 时无签名或验签失败直接拒绝 |
 | 升级 | 默认演练（`dry_run=1`）不写盘；关闭演练后委托 `/usr/bin/upgrade --reboot`。成功判据是 **boot_id 变化 + 脚本 `reboot-ok` 记录 + 版本一致**，三者缺一即判失败 |
 | 备份与回滚 | 写入前自动备份 `/etc/config`；merge / replace 两种恢复；掉电中断可见（`phase=rollback` → `failed/C1`），回滚幂等可重跑 |
 | 诊断 | 一键打包 6 项脱敏信息，不含任何配置内容、不含 token |
-| 通道 | stable（latest）与 beta（releases 列表首个非 draft） |
+| 通道 | stable（latest）、beta（releases 列表首个非 draft），或显式 `tag` |
 
 ## 五个包
 
@@ -71,18 +71,20 @@ apk add --allow-untrusted --force-overwrite --repositories-file /dev/null /tmp/*
 | [救援指引](docs/救援指引.md) | 失败判定、boot 破坏现场特征、线刷与 U-Boot 提示符两条恢复路径 |
 | [签名与密钥](docs/签名与密钥.md) | usign 清单签名、密钥轮换、私钥保管 |
 | [开发备忘](docs/开发备忘.md) | LuCI / rpcd 的三处坑（视图目录、exec 协议、并发） |
-| [发布说明 v0.1.0](docs/发布说明-0.1.0.md) | 版本内容与已知限制 |
+| [发布说明 v0.1.1](docs/发布说明-0.1.1.md) | 本版修了什么（tag、按清单写入、快速失败、陈旧签名） |
+| [发布说明 v0.1.0](docs/发布说明-0.1.0.md) | 首个正式版内容与已知限制 |
 | [破坏性测试预案](docs/破坏性测试预案.md) | 掉电/损坏类测试的前置条件、步骤与实测结论 |
 | [发布评估](docs/发布评估-20261123.md) | 完整评审记录：问题清单、修复、故障矩阵、升级验收 |
 | [测试脚本索引](tests/README.md) | 单测与设备侧脚本怎么跑 |
 
 ## 发布状态
 
-**v0.1.0 正式版**（2026-11-26）。产物：<https://github.com/2286927/luci-app-onecloud-upgrade/releases/tag/v0.1.0>，5 个 noarch apk。打 tag 时 CI 自动构建并附加到 Release。
+**v0.1.1**（2026-11-26）。产物：<https://github.com/2286927/luci-app-onecloud-upgrade/releases/tag/v0.1.1>，5 个 noarch apk。打 tag 时 CI 自动构建并附加到 Release。
 
 已完成的实机验证：
 
 - 真实在线升级 `26.11.17_17.35.18` → `26.11.18_16.27.30`：boot_id 变化、`reboot-ok` 记录、版本一致、`/etc/config` 40 个文件保留、升级后再检测不重复提示
+- **跨仓库升级** `26.11.18_16.27.30` → `26.11.21_08.59.21`（固件来自 `ImmortalWrt-MultiDevice`，用 `tag` 指定）：完成，记录的 sha256 与 Release 摘要一致
 - 故障矩阵 **24/24**；单测 **60 条**
 - boot 分区写坏 = 不可引导（U-Boot `fatload mmc 1:1` 失败 → `Invalid boot device` → `m8b_onecloud#` 循环），线刷恢复两次实证
 
@@ -106,7 +108,7 @@ python3 tools/gen_manifest.py  # 按 Release 资产生成 manifest + 签名
 | 锁 | `/var/run/fwupgrade.lock`，内容 `pid boot_id phase`；`writing_boot` 即使 pid 已死也拒绝自动继续 |
 | 退出码 | 0 成功 / 2 参数或占用 / 3 网络或身份 / 4 空间 / 5 下载 / 6 校验 / 7 未实现 / 8 状态 |
 | 版本比较 | 优先 `build_ts`；退回 `YY.MM.DD_HH.MM.SS` 字符串比较（零填充，可直接比） |
-| 写入 | 只调用 `/usr/bin/upgrade --check|--reboot`；boot 永远由它最后写 |
+| 写入 | 只调用 `/usr/bin/upgrade --reboot --url=<清单 rootfs 直链>`，并导出 `OC_REPO=<配置的仓库>`；boot 永远由它最后写 |
 | 安全默认 | `dry_run=1`：即使清单指定真实 flasher，worker 也强制走 dry-run；只有显式置 0 才写盘 |
 
 ## 不做 / 已知限制
