@@ -1,9 +1,9 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=fwupgrade-flasher-onecloud
-PKG_VERSION:=0.1.6
+PKG_VERSION:=0.1.7
 PKG_RELEASE:=1
-PKG_LICENSE:=GPL-2.0-only
+PKG_LICENSE:=PolyForm-Noncommercial-1.0.0
 
 include $(INCLUDE_DIR)/package.mk
 

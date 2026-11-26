@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## v0.1.7 (2026-11-26)
+
+许可证变更：Apache-2.0 → **PolyForm Noncommercial 1.0.0**（禁止商业使用，版权人保留商业化权利）。
+
+### 变更
+- `LICENSE` 改为 PolyForm Noncommercial 1.0.0：个人/研究/教育/公益/政府用途可自由使用与修改；**商业使用需单独授权**；分发须保留版权声明与 `Required Notice`。
+- 5 个包的 `PKG_LICENSE` 由 `GPL-2.0-only` 改为 `PolyForm-Noncommercial-1.0.0`（此前 Makefile 与 LICENSE 文件本身就不一致，一并纠正）。
+- 新增 [许可与商业使用](docs/许可与商业使用.md)：常见情形对照表（自用/公司内部/随硬件销售/SaaS/改名发布等）、商业授权方式、旧版本说明。
+
+### 说明
+- **v0.1.0 – v0.1.6 仍以 Apache-2.0 授权**，已获得这些版本的人其权利不因本次变更而收回（Apache-2.0 授权不可撤销）。
+- PolyForm Noncommercial 不是 OSI 认可的开源协议，属 source-available。
+
 ## v0.1.6 (2026-11-26)
 
 交互验收暴露的两个健壮性问题，加上备份保护的可视化。

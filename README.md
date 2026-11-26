@@ -72,6 +72,7 @@ apk add --allow-untrusted --force-overwrite --repositories-file /dev/null /tmp/*
 | [救援指引](docs/救援指引.md) | 失败判定、boot 破坏现场特征、线刷与 U-Boot 提示符两条恢复路径 |
 | [签名与密钥](docs/签名与密钥.md) | usign 清单签名、密钥轮换、私钥保管 |
 | [开发备忘](docs/开发备忘.md) | LuCI / rpcd 的三处坑（视图目录、exec 协议、并发） |
+| [许可与商业使用](docs/许可与商业使用.md) | 能不能商用、怎么授权、旧版本的 Apache-2.0 说明 |
 | [发布说明 v0.1.1](docs/发布说明-0.1.1.md) | tag、按清单写入、快速失败、陈旧签名 |
 | [发布说明 v0.1.0](docs/发布说明-0.1.0.md) | 首个正式版内容与已知限制 |
 | [破坏性测试预案](docs/破坏性测试预案.md) | 掉电/损坏类测试的前置条件、步骤与实测结论 |
@@ -129,6 +130,14 @@ python3 tools/gen_manifest.py  # 按 Release 资产生成 manifest + 签名
 
 It is **not** a generic sysupgrade frontend. All 5 packages are `PKGARCH=all` (shell/ucode/JS only) and built in this repo's CI with the OpenWrt 25.12 SDK. Docs are currently Chinese-only: [install](docs/安装与卸载.md), [rescue](docs/救援指引.md), [compatibility](docs/兼容性.md).
 
+**License**: PolyForm Noncommercial 1.0.0 — free to use and modify for noncommercial purposes; commercial use requires a separate license from the copyright holder (who retains that right). See [LICENSE](LICENSE).
+
 ## License
 
-Apache-2.0，见 [LICENSE](LICENSE)。
+**PolyForm Noncommercial License 1.0.0** —— 源码可见，**禁止商业使用**；个人/研究/教育/公益/政府用途可自由使用与修改，转发需保留署名。
+
+- 完整条款：[LICENSE](LICENSE)（中英对照，以英文原文为准）
+- 能不能这么用：[许可与商业使用](docs/许可与商业使用.md)（含常见情形对照表）
+- 商业授权：通过 Issues 联系；**版权人本人不受限制，可自行商业化**
+
+> v0.1.6 及更早版本曾以 Apache-2.0 发布，已获授权者不受本次变更影响。
